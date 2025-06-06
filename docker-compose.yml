@@ -1,0 +1,19 @@
+#本地开发环境
+services:
+  db:
+    image: mysql:8.2
+    container_name: medical_db
+    environment:
+      MYSQL_ROOT_PASSWORD: cm9vdHBhc3N3b3Jk
+      MYSQL_DATABASE: medical_data
+      MYSQL_USER: mediCore
+      MYSQL_PASSWORD: bWVkaUNvcmU=
+    ports:
+      - "23336:3306"
+    volumes:
+      - ./database:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "mediCore", "-pbWVkaUNvcmU="]
+      interval: 10s
+      timeout: 5s
+      retries: 5
