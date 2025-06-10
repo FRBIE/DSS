@@ -1,0 +1,2 @@
+word_name,word_eng,word_short,word_code,word_class,word_apply,word_belong,data_type
+白细胞计数,,WBC,TES[0-9][8],检验名称,示例应用,检验指标,数值类型

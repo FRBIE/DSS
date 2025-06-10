@@ -10,12 +10,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.views import RegisterView, LoginView
 from .views import (
     DictionaryViewSet, DataTemplateViewSet, ArchiveViewSet, CaseViewSet,
-    IdentityViewSet, DataTableViewSet
+    IdentityViewSet, DataTableViewSet, DataTemplateCategoryViewSet
 )
 
 # 创建路由
 router = DefaultRouter()
 router.register(r'dictionary', DictionaryViewSet, basename='dictionary')
+router.register(r'template-category', DataTemplateCategoryViewSet, basename='template-category')
 router.register(r'data-template', DataTemplateViewSet, basename='data-template')
 router.register(r'archive', ArchiveViewSet, basename='archive')
 router.register(r'case', CaseViewSet, basename='case')

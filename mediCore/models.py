@@ -1,13 +1,11 @@
-# medical_app/models.py (or wherever your models.py resides)
-
 from django.db import models
 
-# It's good practice to define choices for fields like 'gender'
+# 性别映射
 GENDER_CHOICES = [
     (0, '女'),
     (1, '男'),
 ]
-
+# 系统词条
 class Dictionary(models.Model):
     id = models.AutoField(primary_key=True, help_text='词条id')
     word_code = models.CharField(max_length=255, unique=True, help_text='词条编号')
@@ -27,8 +25,9 @@ class Dictionary(models.Model):
     def __str__(self):
         return f"{self.word_name} ({self.word_code})"
 
+# 数据模板分类
 class DataTemplateCategory(models.Model):
-    id = models.IntegerField(primary_key=True, help_text='模板分类id') # Not AutoField as per DDL
+    id = models.AutoField(primary_key=True, help_text='模板分类id')
     name = models.CharField(max_length=255, help_text='模板分类名称')
 
     class Meta:
@@ -39,6 +38,7 @@ class DataTemplateCategory(models.Model):
     def __str__(self):
         return self.name
 
+# 数据模板
 class DataTemplate(models.Model):
     id = models.AutoField(primary_key=True, help_text='数据模板id')
     template_code = models.CharField(max_length=255, unique=True, help_text='模板编号')
@@ -46,11 +46,11 @@ class DataTemplate(models.Model):
     template_description = models.TextField(null=True, blank=True, help_text='模板描述')
     category = models.ForeignKey(
         DataTemplateCategory,
-        on_delete=models.CASCADE, # Or models.PROTECT, models.SET_NULL depending on desired behavior
+        on_delete=models.CASCADE,
         db_column='category_id',
         help_text='模板分类id'
     )
-    # ManyToMany relationship with Dictionary through DataTemplateDictionary
+    # 数据模板-系统词条 多对多关系
     dictionaries = models.ManyToManyField(
         Dictionary,
         through='DataTemplateDictionary',
@@ -66,6 +66,8 @@ class DataTemplate(models.Model):
     def __str__(self):
         return f"{self.template_name} ({self.template_code})"
 
+
+# 数据模板-系统词条 多对多关系
 class DataTemplateDictionary(models.Model):
     id = models.AutoField(primary_key=True, help_text='自增id')
     data_template = models.ForeignKey(
@@ -90,36 +92,38 @@ class DataTemplateDictionary(models.Model):
     def __str__(self):
         return f"{self.data_template.template_name} - {self.dictionary.word_name}"
 
+
+# 患者
 class Identity(models.Model):
     identity_id = models.CharField(primary_key=True, max_length=255, help_text='身份证号')
     name = models.CharField(max_length=255, help_text='姓名')
     gender = models.PositiveSmallIntegerField(choices=GENDER_CHOICES, help_text='性别 0-女 1-男')
-    birth_date = models.DateField(help_text='出生年月日') # Changed to DateField
+    birth_date = models.DateField(help_text='出生年月日')
 
     class Meta:
         db_table = 'identity'
         verbose_name = '患者身份'
         verbose_name_plural = '患者表'
-        # The unique index on identity_id is handled by primary_key=True
 
     def __str__(self):
         return f"{self.name} ({self.identity_id})"
 
+# 病例
 class Case(models.Model):
-    id = models.AutoField(primary_key=True, help_text='病例id') # Not AutoField as per DDL
+    id = models.AutoField(primary_key=True, help_text='病例id')
     case_code = models.CharField(max_length=255, unique=True, help_text='病例编号')
     identity = models.ForeignKey(
         Identity,
-        on_delete=models.CASCADE, # Or PROTECT/SET_NULL
+        on_delete=models.CASCADE,
         db_column='identity_id',
-        to_field='identity_id', # Important: FK to a non-PK field of Identity
+        to_field='identity_id',
         help_text='身份证号'
     )
     opd_id = models.CharField(max_length=255, null=True, blank=True, help_text='门诊号')
     inhospital_id = models.CharField(max_length=255, null=True, blank=True, help_text='住院号')
-    name = models.CharField(max_length=255, help_text='姓名') # Denormalized, also in Identity
+    name = models.CharField(max_length=255, help_text='姓名') 
     gender = models.PositiveSmallIntegerField(choices=GENDER_CHOICES, help_text='性别 0-女 1-男')
-    birth_date = models.DateField(help_text='出生年月日') # Denormalized, consider DateField
+    birth_date = models.DateField(help_text='出生年月日')
     phone_number = models.CharField(max_length=36, null=True, blank=True, help_text='联系电话')
     home_address = models.CharField(max_length=512, null=True, blank=True, help_text='家庭住址')
     blood_type = models.CharField(max_length=10, null=True, blank=True, help_text='血型')

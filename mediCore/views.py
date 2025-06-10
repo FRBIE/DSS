@@ -3,14 +3,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Prefetch
 from rest_framework.viewsets import GenericViewSet
-from rest_framework import mixins
-from .models import Dictionary, DataTemplate, Archive, Case, Identity, DataTable
+from rest_framework import mixins, status
+from django.http import HttpResponse
+import csv
+import codecs
+from .models import Dictionary, DataTemplate, Archive, Case, Identity, DataTable, DataTemplateCategory
 from .serializers import (
     DictionarySerializer, DataTemplateSerializer,
     ArchiveListSerializer, ArchiveDetailSerializer, ArchiveSerializer,
     CaseListSerializer, CaseDetailSerializer, CaseSerializer,
     IdentitySerializer, PatientDetailSerializer, DataTableDetailSerializer,
-    DataTableSerializer, DataTableBulkCreateSerializer
+    DataTableSerializer, DataTableBulkCreateSerializer,
+    DataTemplateCategorySerializer, DictionaryBulkImportSerializer
 )
 from utils.pagination import StandardPagination
 
@@ -453,3 +457,60 @@ class DataTableViewSet(CustomModelViewSet):
         if case_code:
             queryset = queryset.filter(case__case_code=case_code)
         return queryset.select_related('case', 'data_template', 'dictionary')
+
+class DataTemplateCategoryViewSet(CustomModelViewSet):
+    """
+    API endpoint for 数据模板分类管理.
+
+    - **Create**: POST /api/template-category/
+      - Required: `name`
+      - Optional: none
+    
+    - **List**: GET /api/template-category/
+      - 支持分页: ?page=1&page_size=10
+    
+    - **Retrieve**: GET /api/template-category/{id}/
+      - 返回模板分类详情
+    
+    - **Update**: PUT /api/template-category/{id}/
+      - 可更新：name
+    
+    - **Delete**: DELETE /api/template-category/{id}/
+    """
+    queryset = DataTemplateCategory.objects.all().order_by('id')
+    serializer_class = DataTemplateCategorySerializer
+    pagination_class = StandardPagination
+
+
+@action(detail=False, methods=['get'])
+def download_template(self, request):
+    """
+    下载词条导入模板
+    """
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="dictionary_import_template.csv"'
+
+    template_path = 'resources/dictionary_import_template.csv'
+    with open(template_path, 'r', encoding='utf-8-sig') as file:
+        response.write(file.read())
+
+    return response
+
+@action(detail=False, methods=['post'])
+def bulk_import(self, request):
+    """
+    批量导入词条
+    """
+    serializer = DictionaryBulkImportSerializer(data=request.data)
+    if serializer.is_valid():
+        result = serializer.save()
+        return Response({
+            'code': 200,
+            'msg': f"成功导入{result['success_count']}条词条，失败{result['error_count']}条",
+            'data': result
+        })
+    return Response({
+        'code': 400,
+        'msg': "导入失败",
+        'data': serializer.errors
+    }, status=status.HTTP_400_BAD_REQUEST)

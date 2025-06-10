@@ -18,7 +18,7 @@ for i in {1..30}; do
       print(f'尝试连接数据库（第 {i} 次）...')
       exit(1)
   " && break || sleep 2
-done  # 这里缺少 done 关键字来结束 for 循环
+done
 # 执行迁移并启动服务器
 poetry run python manage.py makemigrations --noinput
 poetry run python manage.py migrate --noinput

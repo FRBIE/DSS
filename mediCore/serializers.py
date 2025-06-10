@@ -9,7 +9,9 @@ from django.db import IntegrityError, transaction
 from django.utils.timezone import make_aware, get_current_timezone
 from datetime import datetime
 import re
-
+import logging
+import csv
+import codecs
 WORD_CLASS_TO_PREFIX_MAP = {
     "数据类型": "C",
     "字典词条": "A",
@@ -86,9 +88,27 @@ class DictionarySerializer(serializers.ModelSerializer):
 
 
 class DataTemplateCategorySerializer(serializers.ModelSerializer):
+    """数据模板分类序列化器"""
+    template_count = serializers.SerializerMethodField(help_text='该分类下的模板数量')
+    
     class Meta:
         model = DataTemplateCategory
-        fields = '__all__'
+        fields = ['id', 'name', 'template_count']
+        read_only_fields = ['id']  # 设置id为只读字段
+
+    def get_template_count(self, obj):
+        return obj.datatemplate_set.count()
+
+    def validate_name(self, value):
+        """验证分类名称的唯一性"""
+        if self.instance:  # 更新时排除自身
+            exists = DataTemplateCategory.objects.exclude(id=self.instance.id).filter(name=value).exists()
+        else:  # 创建时直接检查
+            exists = DataTemplateCategory.objects.filter(name=value).exists()
+        
+        if exists:
+            raise serializers.ValidationError('该分类名称已存在')
+        return value
 
 
 class DataTemplateSerializer(serializers.ModelSerializer):
@@ -299,11 +319,7 @@ class CaseSerializer(CaseDetailSerializer):
         return archive_ids
 
     def create(self, validated_data):
-        import logging
-        from utils.snowflake import Snowflake
-
         logger = logging.getLogger(__name__)
-        snowflake = Snowflake(datacenter_id=1, worker_id=1)
         
         # 记录初始输入数据
         logger.info(f"开始创建病例，输入数据: {validated_data}")
@@ -589,4 +605,53 @@ class DataTableBulkCreateSerializer(serializers.Serializer):
         return {
             'message': f'成功创建 {len(instance)} 条数据记录',
             'data': DataTableDetailSerializer(instance, many=True).data
+        }
+
+
+class DictionaryBulkImportSerializer(serializers.Serializer):
+    """用于批量导入词条的序列化器"""
+    file = serializers.FileField(help_text='CSV文件')
+
+    def validate(self, attrs):
+        file = attrs['file']
+        if not file.name.endswith('.csv'):
+            raise serializers.ValidationError("只支持CSV文件格式")
+        return attrs
+
+    def create(self, validated_data):
+        file = validated_data['file']
+        reader = csv.DictReader(codecs.iterdecode(file, 'utf-8'))
+        
+        # 验证CSV文件的列名
+        required_fields = ['word_name', 'word_eng', 'word_short', 'word_class', 
+                         'word_apply', 'word_belong', 'data_type']
+        if not all(field in reader.fieldnames for field in required_fields):
+            raise serializers.ValidationError("CSV文件格式不正确，请使用正确的模板")
+
+        dictionaries = []
+        errors = []
+        
+        for row in reader:
+            try:
+                # 过滤掉空字符串值，将其转换为None
+                row = {k: (v if v.strip() != '' else None) for k, v in row.items()}
+                
+                # 创建词条
+                dictionary = Dictionary.objects.create(
+                    word_name=row['word_name'],
+                    word_eng=row['word_eng'],
+                    word_short=row['word_short'],
+                    word_class=row['word_class'],
+                    word_apply=row['word_apply'],
+                    word_belong=row['word_belong'],
+                    data_type=row['data_type']
+                )
+                dictionaries.append(dictionary)
+            except Exception as e:
+                errors.append(f"第{reader.line_num}行导入失败: {str(e)}")
+
+        return {
+            'success_count': len(dictionaries),
+            'error_count': len(errors),
+            'errors': errors
         }
