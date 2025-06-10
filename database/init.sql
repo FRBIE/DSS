@@ -35,7 +35,7 @@ CREATE TABLE `data_template`  (
 
 
 CREATE TABLE `data_template_category`  (
-  `id` int NOT NULL COMMENT '模板分类id',
+  `id` int NOT NULL AUTO_INCREMENT COMMENT '模板分类id',
   `name` varchar(255) NOT NULL COMMENT '模板分类名称',
   PRIMARY KEY (`id`)
 )COMMENT='数据模板分类表';
@@ -46,7 +46,7 @@ CREATE TABLE `data_template_dictionary` (
   `data_template_id` INT  NOT NULL COMMENT '数据模板id',
   `dictionary_id` INT  NOT NULL COMMENT '词条id',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_template_dictionary` (`data_template_id`, `dictionary_id`), -- 唯一约束，确保一个模板中一个词条只出现一次
+  UNIQUE KEY `uk_template_dictionary` (`data_template_id`, `dictionary_id`) -- 唯一约束，确保一个模板中一个词条只出现一次
 ) COMMENT='数据模板与词条关联表';
 
 
