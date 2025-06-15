@@ -30,7 +30,7 @@ CREATE TABLE `data_template`  (
   `template_description` text NULL COMMENT '模板描述',
   `category_id` int NOT NULL COMMENT '模板分类id',
   PRIMARY KEY (`id`),
-   UNIQUE INDEX `uk_template_code` (`template_code`), -- 确保唯一性
+   UNIQUE INDEX `uk_template_code` (`template_code`)-- 确保唯一性
 )COMMENT='数据模板表';
 
 
@@ -58,7 +58,7 @@ CREATE TABLE `data_table`  (
   `value` varchar(1024) NOT NULL COMMENT '值',
   `check_time` datetime not null comment '检查时间'
   PRIMARY KEY (`id`),
-   UNIQUE INDEX `uk_data` (`case_id`, `data_template_id`,`dictionary_id`), -- 确保唯一性
+   UNIQUE INDEX `uk_data` (`case_id`, `data_template_id`,`dictionary_id`)-- 确保唯一性
 )COMMENT='数据表';
 
 
@@ -79,7 +79,7 @@ CREATE TABLE `case`  (
   `is_in_transplant_queue` varchar(16) NULL DEFAULT '未填写' COMMENT '是否存在移植排队',
   PRIMARY KEY (`id`),
     UNIQUE INDEX `uk_case_code` (`case_code`), -- 确保唯一性
-  INDEX `idx_identity_id` (`identity_id`), -- 身份证号索引
+  INDEX `idx_identity_id` (`identity_id`)-- 身份证号索引
 )COMMENT='病例表';
 
 CREATE TABLE `archive`  (
@@ -88,7 +88,7 @@ CREATE TABLE `archive`  (
   `archive_name` varchar(255) NOT NULL COMMENT '档案名称',
   `archive_description` text NULL COMMENT '档案描述',
   PRIMARY KEY (`id`)
-    UNIQUE INDEX `uk_data` (`archive_code`), -- 确保唯一性
+    UNIQUE INDEX `uk_data` (`archive_code`) -- 确保唯一性
 )COMMENT='档案表';
 
 CREATE TABLE `archive_case`  (
@@ -96,7 +96,7 @@ CREATE TABLE `archive_case`  (
   `archive_id` int NOT NULL COMMENT '档案id',
   `case_id` int NOT NULL COMMENT '病例id',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_archive_case` (`archive_id`, `case_id`), -- 唯一约束，确保一个档案中一个病例只出现一次
+  UNIQUE KEY `uk_archive_case` (`archive_id`, `case_id`) -- 唯一约束，确保一个档案中一个病例只出现一次
 )COMMENT='档案与病例关联表';
 
 CREATE TABLE `identity`  (
