@@ -90,13 +90,16 @@ class DictionarySerializer(serializers.ModelSerializer):
 class DataTemplateCategorySerializer(serializers.ModelSerializer):
     """数据模板分类序列化器"""
     template_count = serializers.SerializerMethodField(help_text='该分类下的模板数量')
-    
+
     class Meta:
         model = DataTemplateCategory
         fields = ['id', 'name', 'template_count']
-        read_only_fields = ['id']  # 设置id为只读字段
+        read_only_fields = ['id']
 
     def get_template_count(self, obj):
+        # 如果是新创建的实例（还没有id），返回0
+        if not obj.id:
+            return 0
         return obj.datatemplate_set.count()
 
     def validate_name(self, value):
@@ -325,8 +328,7 @@ class CaseSerializer(CaseDetailSerializer):
         logger.info(f"开始创建病例，输入数据: {validated_data}")
         
         archives_data = validated_data.pop('archive_codes', [])
-        # archives_data = validated_data.pop('id', [])
-
+        archives_data = validated_data.pop('id', [])
         validated_data['case_code'] = self.generate_case_code()
         logger.info(f"生成的病例编号: {validated_data['case_code']}")
 
