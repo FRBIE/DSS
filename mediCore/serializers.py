@@ -537,7 +537,7 @@ class ArchiveListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Archive
-        fields = ['id', 'archive_code', 'archive_name', 'case_count']
+        fields = ['id', 'archive_code', 'archive_name', 'archive_description', 'case_count']
         read_only_fields = ['id']  # 添加id为只读字段
 
     def to_representation(self, instance):
