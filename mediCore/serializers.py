@@ -255,6 +255,7 @@ class CaseDetailSerializer(BaseCaseSerializer):
 class CaseSerializer(CaseDetailSerializer):
     """基础序列化器，包含通用的创建和更新逻辑"""
     identity = serializers.CharField(help_text='身份证号')  # 改为 CharField，接收身份证号字符串
+    birth_date = serializers.DateField(required=False, help_text='出生年月日')  # 修改为非必填
     archive_codes = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -263,8 +264,32 @@ class CaseSerializer(CaseDetailSerializer):
     )
 
     class Meta(CaseDetailSerializer.Meta):
-        ref_name = 'Case'
-        read_only_fields = ['id']  # 添加id为只读字段
+        model = Case
+        fields = CaseDetailSerializer.Meta.fields + ['identity', 'archive_codes']
+
+    def get_birth_date_from_identity(self, identity_id):
+        """从身份证号中提取出生日期"""
+        try:
+            year = int(identity_id[6:10])
+            month = int(identity_id[10:12])
+            day = int(identity_id[12:14])
+            return datetime(year, month, day).date()
+        except (ValueError, IndexError):
+            raise serializers.ValidationError({'identity': '身份证号格式不正确'})
+
+    def validate(self, data):
+        # 从身份证号获取出生日期
+        identity_id = data.get('identity')
+        birth_date_from_id = self.get_birth_date_from_identity(identity_id)
+        
+        # 如果前端传了出生日期，验证是否一致
+        if 'birth_date' in data:
+            if data['birth_date'] != birth_date_from_id:
+                raise serializers.ValidationError({'birth_date': '出生日期与身份证号中的日期不符'})
+        
+        # 使用身份证中的出生日期
+        data['birth_date'] = birth_date_from_id
+        return super().validate(data)
 
     def validate_identity(self, value):
         """验证身份证号格式"""
