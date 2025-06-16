@@ -194,30 +194,28 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {asctime} {message}',
+            'format': '{levelname} {asctime} {module} {message}',
             'style': '{',
         },
     },
     'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
         'file': {
-            'level': 'DEBUG',
             'class': 'logging.FileHandler',
             'filename': 'debug.log',
             'formatter': 'verbose',
         },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
     },
     'loggers': {
-        'mediCore': {
-            'handlers': ['file', 'console'],
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+        },
+        'mediCore': {  # 应用的 logger
+            'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': True,
         },

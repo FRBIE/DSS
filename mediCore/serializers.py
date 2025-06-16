@@ -278,24 +278,64 @@ class CaseSerializer(CaseDetailSerializer):
             raise serializers.ValidationError({'identity': '身份证号格式不正确'})
 
     def validate(self, data):
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始验证数据: {data}")
+
         # 从身份证号获取出生日期
         identity_id = data.get('identity')
-        birth_date_from_id = self.get_birth_date_from_identity(identity_id)
-        
-        # 如果前端传了出生日期，验证是否一致
-        if 'birth_date' in data:
-            if data['birth_date'] != birth_date_from_id:
-                raise serializers.ValidationError({'birth_date': '出生日期与身份证号中的日期不符'})
-        
-        # 使用身份证中的出生日期
-        data['birth_date'] = birth_date_from_id
+        if identity_id:
+            birth_date_from_id = self.get_birth_date_from_identity(identity_id)
+            
+            # 如果前端传了出生日期，验证是否一致
+            if 'birth_date' in data:
+                logger.info(f"比较出生日期: 传入={data['birth_date']}, 身份证号中={birth_date_from_id}")
+                if data['birth_date'] != birth_date_from_id:
+                    raise serializers.ValidationError({'birth_date': '出生日期与身份证号中的日期不符'})
+            
+            # 使用身份证中的出生日期
+            data['birth_date'] = birth_date_from_id
+            logger.info(f"使用身份证号中的出生日期: {birth_date_from_id}")
+
+        logger.info(f"数据验证完成: {data}")
         return super().validate(data)
 
     def validate_identity(self, value):
         """验证身份证号格式"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"验证身份证号: {value}")
+        
         if not value or len(value) != 18:
+            logger.error(f"无效的身份证号长度: {len(value) if value else 'None'}")
             raise serializers.ValidationError("请提供有效的18位身份证号")
         return value
+
+    def validate_archive_codes(self, value):
+        """验证档案编号列表"""
+        logger = logging.getLogger(__name__)
+        logger.info(f"验证档案编号列表: {value}")
+        
+        if not value:
+            return value
+
+        archive_ids = []
+        invalid_codes = []
+
+        for archive_code in value:
+            try:
+                archive = Archive.objects.get(archive_code=archive_code)
+                archive_ids.append(archive.id)
+                logger.info(f"找到档案: {archive_code} -> {archive.id}")
+            except Archive.DoesNotExist:
+                logger.error(f"未找到档案: {archive_code}")
+                invalid_codes.append(archive_code)
+
+        if invalid_codes:
+            error_msg = f"以下档案编号不存在: {', '.join(invalid_codes)}"
+            logger.error(error_msg)
+            raise serializers.ValidationError(error_msg)
+
+        logger.info(f"档案编号验证完成，有效的档案ID: {archive_ids}")
+        return archive_ids
 
     def generate_case_code(self):
         """生成病例编号：C + 6位数字"""
@@ -326,105 +366,47 @@ class CaseSerializer(CaseDetailSerializer):
                 raise serializers.ValidationError('日期格式错误，请使用YYYY-MM-DD格式')
         raise serializers.ValidationError('无效的日期格式')
 
-    def validate_archive_codes(self, value):
-        """验证档案编号列表"""
-        if not value:
-            return value
-
-        archive_ids = []
-        invalid_codes = []
-
-        for archive_code in value:
-            try:
-                archive = Archive.objects.get(archive_code=archive_code)
-                archive_ids.append(archive.id)
-            except Archive.DoesNotExist:
-                invalid_codes.append(archive_code)
-
-        if invalid_codes:
-            raise serializers.ValidationError(f"以下档案编号不存在: {', '.join(invalid_codes)}")
-
-        return archive_ids
-
-    def create(self, validated_data):
-        logger = logging.getLogger(__name__)
-        
-        # 记录初始输入数据
-        logger.info(f"开始创建病例，输入数据: {validated_data}")
-        
-        archives_data = validated_data.pop('archive_codes', [])
-        # archives_data = validated_data.pop('id', [])
-        validated_data['case_code'] = self.generate_case_code()
-        logger.info(f"生成的病例编号: {validated_data['case_code']}")
-
-        # 处理患者信息
-        identity_id = validated_data.pop('identity')  # 从验证后的数据中取出身份证号
-        logger.info(f"处理患者信息，身份证号: {identity_id}")
-        
-        try:
-            # 尝试获取已存在的患者
-            identity = Identity.objects.get(identity_id=identity_id)
-            logger.info(f"找到现有患者记录: {identity.name}")
-            # 更新患者信息
-            identity.name = validated_data.get('name')
-            identity.gender = validated_data.get('gender')
-            identity.birth_date = validated_data.get('birth_date')
-            identity.save()
-            logger.info("患者信息已更新")
-        except Identity.DoesNotExist:
-            # 创建新患者
-            logger.info("未找到现有患者，创建新患者记录")
-            identity = Identity.objects.create(
-                identity_id=identity_id,
-                name=validated_data.get('name'),
-                gender=validated_data.get('gender'),
-                birth_date=validated_data.get('birth_date')
-            )
-            logger.info(f"新患者创建成功: {identity.name}")
-
-        # 添加身份证号回validated_data
-        validated_data['identity'] = identity
-        logger.info("准备创建病例记录")
-
-        # 创建病例
-        try:
-            logger.debug(f"创建病例的数据: {validated_data}")
-            case = Case.objects.create(**validated_data)
-            logger.info(f"病例创建成功: {case.case_code}")
-            
-            if archives_data:
-                logger.info(f"开始关联档案，档案ID列表: {archives_data}")
-                archive_cases = [
-                    ArchiveCase(case=case, archive_id=archive_id)
-                    for archive_id in archives_data
-                ]
-                ArchiveCase.objects.bulk_create(archive_cases)
-                logger.info("档案关联完成")
-            return case
-        except IntegrityError as e:
-            logger.error(f"创建病例时发生完整性错误: {str(e)}")
-            raise serializers.ValidationError({
-                "case_code": "无法生成唯一的病例编号，请重试。"
-            })
-
     def update(self, instance, validated_data):
-        archives_data = validated_data.pop('archives', None)
+        logger = logging.getLogger(__name__)
+        logger.info(f"开始更新病例，病例编号: {instance.case_code}")
+        logger.debug(f"全部更新数据: {validated_data}")
 
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        # 处理档案关联
+        archive_codes = validated_data.pop('archive_codes', None)
+        logger.info(f"档案编号: {archive_codes}")
 
-        if archives_data is not None:
-            # 清除现有关联
-            ArchiveCase.objects.filter(case=instance).delete()
-            # 创建新关联
-            archive_cases = [
-                ArchiveCase(case=instance, archive=archive)
-                for archive in archives_data
-            ]
-            ArchiveCase.objects.bulk_create(archive_cases)
+        try:
+            # 更新基本字段
+            for attr, value in validated_data.items():
+                logger.debug(f"更新字段 {attr}: {value}")
+                setattr(instance, attr, value)
+            
+            # 确保实例保存成功
+            instance.save()
+            logger.info("基本字段更新完成")
 
-        return instance
+            # 如果提供了档案编号，更新档案关联
+            if archive_codes is not None:
+                try:
+                    logger.info(f"开始更新档案关联: {archive_codes}")
+                    # 获取档案实例
+                    archives = Archive.objects.filter(id__in=archive_codes)
+                    found_codes = [a.archive_code for a in archives]
+                    logger.info(f"找到以下档案: {found_codes}")
+                    
+                    # 更新多对多关系
+                    instance.archives.set(archives)
+                    logger.info("档案关联更新完成")
+                except Exception as e:
+                    logger.error(f"更新档案关联时出错: {str(e)}")
+                    raise serializers.ValidationError({'archive_codes': str(e)})
+
+            logger.info("病例更新成功完成")
+            return instance
+            
+        except Exception as e:
+            logger.error(f"更新病例时发生错误: {str(e)}")
+            raise serializers.ValidationError(str(e))
 
 
 class IdentitySerializer(serializers.ModelSerializer):
