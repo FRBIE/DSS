@@ -27,7 +27,7 @@ class Dictionary(models.Model):
 
 # 数据模板分类
 class DataTemplateCategory(models.Model):
-    id = models.IntegerField(primary_key=True, help_text='模板分类id')
+    id = models.AutoField(primary_key=True, help_text='模板分类id')
     name = models.CharField(max_length=255, help_text='模板分类名称')
 
     class Meta:
