@@ -182,7 +182,7 @@ class DataTable(models.Model):
         help_text='词条id'
     )
     value = models.CharField(max_length=1024, help_text='值') # Consider TextField if values can be very long
-    check_time = models.DateField(help_text='检查时间') # Changed to DateField
+    check_time = models.DateTimeField(help_text='检查时间') # Changed to DateTimeField
 
     class Meta:
         db_table = 'data_table'

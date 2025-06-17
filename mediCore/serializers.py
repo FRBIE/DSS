@@ -559,6 +559,24 @@ class DataTableSerializer(serializers.ModelSerializer):
         model = DataTable
         fields = ['case_code', 'template_code', 'word_code', 'check_time', 'value']
 
+    def validate(self, data):
+        try:
+            Case.objects.get(case_code=data['case_code'])
+        except Case.DoesNotExist:
+            raise serializers.ValidationError({'case_code': '病例编号不存在'})
+
+        try:
+            DataTemplate.objects.get(template_code=data['template_code'])
+        except DataTemplate.DoesNotExist:
+            raise serializers.ValidationError({'template_code': '模板编号不存在'})
+
+        try:
+            Dictionary.objects.get(word_code=data['word_code'])
+        except Dictionary.DoesNotExist:
+            raise serializers.ValidationError({'word_code': '词条编号不存在'})
+
+        return data
+
     def create(self, validated_data):
         # 获取病例信息
         case_code = validated_data.pop('case_code')
@@ -579,24 +597,6 @@ class DataTableSerializer(serializers.ModelSerializer):
             dictionary=dictionary,
             **validated_data
         )
-
-    def validate(self, data):
-        try:
-            Case.objects.get(case_code=data['case_code'])
-        except Case.DoesNotExist:
-            raise serializers.ValidationError({'case_code': '病例编号不存在'})
-
-        try:
-            DataTemplate.objects.get(template_code=data['template_code'])
-        except DataTemplate.DoesNotExist:
-            raise serializers.ValidationError({'template_code': '模板编号不存在'})
-
-        try:
-            Dictionary.objects.get(word_code=data['word_code'])
-        except Dictionary.DoesNotExist:
-            raise serializers.ValidationError({'word_code': '词条编号不存在'})
-
-        return data
 
 
 class ArchiveListSerializer(serializers.ModelSerializer):
@@ -670,26 +670,50 @@ class DataTableBulkCreateSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
-        for item in data:
+        # 验证病例和模板是否存在
+        try:
+            Case.objects.get(case_code=data['case_code'])
+        except Case.DoesNotExist:
+            raise serializers.ValidationError({'case_code': '病例编号不存在'})
+
+        try:
+            DataTemplate.objects.get(template_code=data['template_code'])
+        except DataTemplate.DoesNotExist:
+            raise serializers.ValidationError({'template_code': '模板编号不存在'})
+
+        # 验证日期格式和词条是否存在
+        for item in data['data_list']:
             try:
-                datetime.strptime(item['check_time'], '%Y-%m-%d')
+                datetime.strptime(item['check_time'], '%Y-%m-%d %H:%M:%S')
             except ValueError:
                 raise serializers.ValidationError({
-                    'check_time': f'日期格式错误: {item["check_time"]}, 请使用YYYY-MM-DD格式'
+                    'check_time': f'日期格式错误: {item["check_time"]}, 请使用YYYY-MM-DD HH:MM:SS格式'
                 })
+            
+            try:
+                Dictionary.objects.get(word_code=item['word_code'])
+            except Dictionary.DoesNotExist:
+                raise serializers.ValidationError({
+                    'word_code': f'词条编号不存在: {item["word_code"]}'
+                })
+
         return data
 
     def create(self, validated_data):
         from django.db import transaction
 
         with transaction.atomic():
+            # 获取病例和模板信息
+            case = Case.objects.get(case_code=validated_data['case_code'])
+            template = DataTemplate.objects.get(template_code=validated_data['template_code'])
+
             records = []
             for item in validated_data['data_list']:
                 dictionary = Dictionary.objects.get(word_code=item['word_code'])
                 records.append(
                     DataTable(
-                        case=self.case,
-                        data_template=self.template,
+                        case=case,
+                        data_template=template,
                         dictionary=dictionary,
                         value=item['value'],
                         check_time=item['check_time']
