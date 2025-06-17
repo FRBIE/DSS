@@ -12,6 +12,7 @@ from .views import (
     DictionaryViewSet, DataTemplateViewSet, ArchiveViewSet, CaseViewSet,
     IdentityViewSet, DataTableViewSet, DataTemplateCategoryViewSet
 )
+from mediCore.views import PatientMergedCaseListView
 
 # 创建路由
 router = DefaultRouter()
@@ -53,4 +54,6 @@ urlpatterns = [
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('api/swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+
+    path('api/patient-merged-case/', PatientMergedCaseListView.as_view(), name='patient-merged-case'),
 ]

@@ -14,9 +14,11 @@ from .serializers import (
     CaseListSerializer, CaseDetailSerializer, CaseSerializer,
     IdentitySerializer, PatientDetailSerializer, DataTableDetailSerializer,
     DataTableSerializer, DataTableBulkCreateSerializer,
-    DataTemplateCategorySerializer, DictionaryBulkImportSerializer
+    DataTemplateCategorySerializer, DictionaryBulkImportSerializer,
+    PatientMergedCaseSerializer
 )
 from utils.pagination import StandardPagination
+from rest_framework.views import APIView
 
 class DictionaryViewSet(CustomModelViewSet):
     """
@@ -514,3 +516,52 @@ def bulk_import(self, request):
         'msg': "导入失败",
         'data': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
+
+class PatientMergedCaseListView(APIView):
+    """
+    获取患者列表（每个患者只展示一行，字段为所有病例中最新非空值，支持分页）
+    """
+    pagination_class = StandardPagination
+
+    def get(self, request):
+        from collections import defaultdict
+        from rest_framework.response import Response
+        from .models import Case
+
+        # 1. 查出所有病例，按identity_id分组，id降序
+        all_cases = Case.objects.select_related('identity').order_by('identity_id', '-id')
+        patient_dict = defaultdict(list)
+        for case in all_cases:
+            patient_dict[case.identity.identity_id].append(case)
+
+        result = []
+        for identity_id, cases in patient_dict.items():
+            identity = cases[0].identity  # 该患者的Identity对象
+            # 字段级别合并
+            def get_latest_non_empty(attr):
+                for c in cases:
+                    val = getattr(c, attr)
+                    if val not in [None, '', '未填写']:
+                        return val
+                return None
+
+            latest_case = cases[0]  # id最大
+            result.append({
+                'identity_id': identity.identity_id,
+                'name': identity.name,
+                'gender': identity.gender,
+                'birth_date': identity.birth_date,
+                'case_id': latest_case.id,
+                'case_code': latest_case.case_code,
+                'phone_number': get_latest_non_empty('phone_number'),
+                'home_address': get_latest_non_empty('home_address'),
+                'blood_type': get_latest_non_empty('blood_type'),
+                'has_transplant_surgery': get_latest_non_empty('has_transplant_surgery'),
+                'is_in_transplant_queue': get_latest_non_empty('is_in_transplant_queue'),
+            })
+
+        # 分页
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(result, request, view=self)
+        serializer = PatientMergedCaseSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)

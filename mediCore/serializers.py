@@ -1,17 +1,17 @@
-from rest_framework import serializers
 from .models import (
     Dictionary, DataTemplateCategory, DataTemplate, DataTemplateDictionary,
-    Identity, Case, Archive, ArchiveCase, DataTable, Images
+    Identity, Case, Archive, DataTable
 )
-
 from rest_framework import serializers
-from django.db import IntegrityError, transaction
-from django.utils.timezone import make_aware, get_current_timezone
+from django.db import IntegrityError
 from datetime import datetime
 import re
 import logging
 import csv
 import codecs
+logger = logging.getLogger(__name__)
+
+
 
 WORD_CLASS_TO_PREFIX_MAP = {
     "数据类型": "C",
@@ -25,9 +25,6 @@ WORD_CLASS_TO_PREFIX_MAP = {
     "检查名称": "CHK",
     "检查类型": "EX",
 }
-
-logger = logging.getLogger(__name__)
-
 class DictionarySerializer(serializers.ModelSerializer):
     word_code = serializers.CharField(read_only=True, help_text='词条编号 (自动生成)')
 
@@ -44,7 +41,7 @@ class DictionarySerializer(serializers.ModelSerializer):
             'word_belong',
             'data_type'
         ]
-        read_only_fields = ['id']  # 添加id为只读字段
+        read_only_fields = ['id']
 
     def validate_word_class(self, value):
         """
@@ -755,3 +752,25 @@ class DictionaryBulkImportSerializer(serializers.Serializer):
             'error_count': len(errors),
             'errors': errors
         }
+
+
+class PatientMergedCaseSerializer(serializers.Serializer):
+    identity_id = serializers.CharField()
+    name = serializers.CharField()
+    gender = serializers.CharField()
+    birth_date = serializers.DateField()
+    age = serializers.SerializerMethodField()
+    # 病例相关字段
+    case_id = serializers.IntegerField()
+    case_code = serializers.CharField()
+    phone_number = serializers.CharField(allow_null=True)
+    home_address = serializers.CharField(allow_null=True)
+    blood_type = serializers.CharField(allow_null=True)
+    has_transplant_surgery = serializers.CharField(allow_null=True)
+    is_in_transplant_queue = serializers.CharField(allow_null=True)
+
+    def get_age(self, obj):
+        from datetime import date
+        today = date.today()
+        born = obj['birth_date']
+        return (today.year - born.year) - ((today.month, today.day) < (born.month, born.day))
