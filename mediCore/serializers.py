@@ -441,6 +441,28 @@ class CaseSerializer(CaseDetailSerializer):
         logger.info(f"开始更新病例，病例编号: {instance.case_code}")
         logger.debug(f"全部更新数据: {validated_data}")
 
+        # 处理身份证号
+        identity_id = validated_data.pop('identity', None)
+        if identity_id:
+            try:
+                identity_instance = Identity.objects.get(identity_id=identity_id)
+                # 更新Identity信息
+                for field in ['name', 'gender', 'birth_date']:
+                    if field in validated_data:
+                        setattr(identity_instance, field, validated_data[field])
+                identity_instance.save()
+                validated_data['identity'] = identity_instance
+            except Identity.DoesNotExist:
+                # 如果Identity不存在，创建新的
+                identity_data = {
+                    'identity_id': identity_id,
+                    'name': validated_data.get('name'),
+                    'gender': validated_data.get('gender'),
+                    'birth_date': validated_data.get('birth_date')
+                }
+                identity_instance = Identity.objects.create(**identity_data)
+                validated_data['identity'] = identity_instance
+
         # 处理档案关联
         archive_codes = validated_data.pop('archive_codes', None)
         archive_ids = validated_data.pop('archives', None)
