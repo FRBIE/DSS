@@ -12,7 +12,7 @@ from .views import (
     DictionaryViewSet, DataTemplateViewSet, ArchiveViewSet, CaseViewSet,
     IdentityViewSet, DataTableViewSet, DataTemplateCategoryViewSet
 )
-from mediCore.views import PatientMergedCaseListView
+from mediCore.views import PatientMergedCaseListView, CaseTemplateSummaryView
 
 # 创建路由
 router = DefaultRouter()
@@ -56,4 +56,5 @@ urlpatterns = [
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
     path('api/patient-merged-case/', PatientMergedCaseListView.as_view(), name='patient-merged-case'),
+    path('api/case-template-summary/', CaseTemplateSummaryView.as_view(), name='case-template-summary'),
 ]

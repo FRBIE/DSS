@@ -19,6 +19,9 @@ from .serializers import (
 )
 from utils.pagination import StandardPagination
 from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 
 class DictionaryViewSet(CustomModelViewSet):
     """
@@ -565,3 +568,125 @@ class PatientMergedCaseListView(APIView):
         page = paginator.paginate_queryset(result, request, view=self)
         serializer = PatientMergedCaseSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+class CaseTemplateSummaryView(APIView):
+    """
+    接收一个或多个case_code，返回这些病例的所有数据模板下的数据，
+    包含模板分类、模板名称、模板编号、检查时间。
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="传入一个或多个病例编号（case_code），返回这些病例的所有数据模板下的数据，包含模板分类、模板名称、模板编号、检查时间。",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['case_codes'],
+            properties={
+                'case_codes': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Items(type=openapi.TYPE_STRING),
+                    description='病例编号列表，如[\"XA568942\", \"XA584523\"]'
+                )
+            },
+            example={
+                'case_codes': ['XA568942', 'XA584523']
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功返回模板分组数据",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "操作成功",
+                        "data": [
+                            {
+                                "template_category": "临床检验",
+                                "templates": [
+                                    {
+                                        "template_name": "血常规",
+                                        "template_code": "T000001",
+                                        "check_time": "2024-06-01"
+                                    },
+                                    {
+                                        "template_name": "凝血四项",
+                                        "template_code": "T000002",
+                                        "check_time": "2024-06-02"
+                                    }
+                                ]
+                            },
+                            {
+                                "template_category": "辅助检查",
+                                "templates": [
+                                    {
+                                        "template_name": "胸部CT",
+                                        "template_code": "T000003",
+                                        "check_time": "2024-06-03"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ),
+            400: '参数错误',
+            404: '未找到相关病例'
+        }
+    )
+    def post(self, request):
+        case_codes = request.data.get('case_codes', [])
+        if not case_codes or not isinstance(case_codes, list):
+            return Response({
+                'code': 400,
+                'msg': '请提供case_codes列表',
+                'data': None
+            }, status=400)
+
+        # 查询所有相关病例id
+        from .models import Case, DataTable
+        case_id_map = {c.case_code: c.id for c in Case.objects.filter(case_code__in=case_codes)}
+        if not case_id_map:
+            return Response({
+                'code': 404,
+                'msg': '未找到相关病例',
+                'data': None
+            }, status=404)
+        case_ids = list(case_id_map.values())
+
+        # 查询所有相关数据表数据
+        data_tables = DataTable.objects.filter(case_id__in=case_ids).select_related(
+            'data_template', 'data_template__category'
+        )
+
+        # 组装分组结构: 分类->模板->检查时间
+        result = {}
+        for dt in data_tables:
+            category = dt.data_template.category.name if dt.data_template and dt.data_template.category else None
+            template_name = dt.data_template.template_name if dt.data_template else None
+            template_code = dt.data_template.template_code if dt.data_template else None
+            check_time = dt.check_time.strftime('%Y-%m-%d') if dt.check_time else None
+            if not (category and template_name and template_code and check_time):
+                continue
+            if category not in result:
+                result[category] = {}
+            if template_code not in result[category]:
+                result[category][template_code] = {
+                    'template_name': template_name,
+                    'template_code': template_code,
+                    'check_time': check_time
+                }
+            # 如果同一模板下有多条数据，检查时间只保留第一个（你保证只有一个）
+
+        # 转换为前端需要的结构
+        data = []
+        for category, templates in result.items():
+            data.append({
+                'template_category': category,
+                'templates': list(templates.values())
+            })
+
+        return Response({
+            'code': 200,
+            'msg': '操作成功',
+            'data': data
+        })
