@@ -63,7 +63,7 @@ CREATE TABLE `data_table`  (
 
 
 CREATE TABLE `case`  (
-  `id` int NOT NULL COMMENT '病例id',
+  `id` int NOT NULL AUTO_INCREMENT COMMENT '病例id',
   `case_code` varchar(255) NOT NULL COMMENT '病例编号',
   `identity_id` varchar(255) NOT NULL COMMENT '身份证号',
   `opd_id` varchar(255) NULL COMMENT '门诊号',
