@@ -545,52 +545,28 @@ class ArchiveSerializer(ArchiveDetailSerializer):
     """基础序列化器，包含通用的创建和更新逻辑"""
 
     def generate_archive_code(self):
-        """
-        生成档案编号：A + 6位数字
-        增加重试逻辑以确保生成唯一的编号
-        """
+        """生成档案编号：A + 6位数字"""
         prefix = 'A'
         NUM_DIGITS = 6
-        MAX_RETRIES = 3
-        
-        for attempt in range(MAX_RETRIES):
-            try:
-                # 获取最后一个编号
-                last_archive = Archive.objects.filter(
-                    archive_code__startswith=prefix
-                ).order_by('-archive_code').first()
+        last_archive = Archive.objects.filter(
+            archive_code__startswith=prefix
+        ).order_by('-archive_code').first()
 
-                next_number = 1
-                if last_archive and last_archive.archive_code:
-                    numeric_part = last_archive.archive_code[len(prefix):]
-                    if numeric_part.isdigit():
-                        next_number = int(numeric_part) + 1
+        next_number = 1
+        if last_archive and last_archive.archive_code:
+            numeric_part = last_archive.archive_code[len(prefix):]
+            if numeric_part.isdigit():
+                next_number = int(numeric_part) + 1
 
-                archive_code = f"{prefix}{next_number:0{NUM_DIGITS}d}"
-                
-                # 检查生成的编号是否已存在
-                if not Archive.objects.filter(archive_code=archive_code).exists():
-                    return archive_code
-            except Exception:
-                if attempt == MAX_RETRIES - 1:  # 最后一次尝试
-                    raise serializers.ValidationError({
-                        "archive_code": "生成档案编号时发生错误，请重试"
-                    })
-                continue
-        
-        # 如果所有尝试都失败了
-        raise serializers.ValidationError({
-            "archive_code": "无法生成唯一的档案编号，请稍后重试"
-        })
+        return f"{prefix}{next_number:0{NUM_DIGITS}d}"
 
     def create(self, validated_data):
-        archive_code = self.generate_archive_code()
-        validated_data['archive_code'] = archive_code
+        validated_data['archive_code'] = self.generate_archive_code()
         try:
             return super().create(validated_data)
         except IntegrityError:
             raise serializers.ValidationError({
-                "archive_code": "无法创建档案，请重试"
+                "archive_code": "无法生成唯一的档案编号，请重试。"
             })
 
 

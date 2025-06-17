@@ -83,7 +83,7 @@ CREATE TABLE `case`  (
 )COMMENT='病例表';
 
 CREATE TABLE `archive`  (
-  `id` int NOT NULL COMMENT '档案id',
+  `id` int NOT NULL AUTO_INCREMENT COMMENT '档案id',
   `archive_code` varchar(255) NOT NULL COMMENT '档案编号',
   `archive_name` varchar(255) NOT NULL COMMENT '档案名称',
   `archive_description` text NULL COMMENT '档案描述',
