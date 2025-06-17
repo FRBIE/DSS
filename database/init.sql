@@ -54,11 +54,11 @@ CREATE TABLE `data_table`  (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '自增id',
   `case_id` int NOT NULL COMMENT '病例id',
   `data_template_id` int NOT NULL COMMENT '数据模板id',
-  `dictionary_id` int not null comment '词条id'
+  `dictionary_id` int not null comment '词条id',
   `value` varchar(1024) NOT NULL COMMENT '值',
-  `check_time` datetime not null comment '检查时间'
+  `check_time` datetime not null comment '检查时间',
   PRIMARY KEY (`id`),
-   UNIQUE INDEX `uk_data` (`case_id`, `data_template_id`,`dictionary_id`)-- 确保唯一性
+   UNIQUE INDEX `uk_data` (`case_id`, `data_template_id`,`dictionary_id`) -- 确保唯一性
 )COMMENT='数据表';
 
 
@@ -87,7 +87,7 @@ CREATE TABLE `archive`  (
   `archive_code` varchar(255) NOT NULL COMMENT '档案编号',
   `archive_name` varchar(255) NOT NULL COMMENT '档案名称',
   `archive_description` text NULL COMMENT '档案描述',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
     UNIQUE INDEX `uk_data` (`archive_code`) -- 确保唯一性
 )COMMENT='档案表';
 
