@@ -690,3 +690,91 @@ class CaseTemplateSummaryView(APIView):
             'msg': '操作成功',
             'data': data
         })
+
+class CaseTemplateDetailView(APIView):
+    """
+    查询某病例下某模板的所有词条及其值（详情）。
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="传入病例编号和模板编号，返回该病例下该模板的所有词条及其值、检查时间、模板名称。",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['case_code', 'template_code'],
+            properties={
+                'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
+                'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号')
+            },
+            example={
+                'case_code': 'XA568942',
+                'template_code': 'T000001'
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功返回模板详情",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "操作成功",
+                        "data": {
+                            "template_name": "血常规",
+                            "check_time": "2024-06-01 12:21",
+                            "items": [
+                                {"word_code": "A000001", "word_name": "白细胞", "value": "5.6"},
+                                {"word_code": "A000002", "word_name": "红细胞", "value": "4.2"}
+                            ]
+                        }
+                    }
+                }
+            ),
+            400: '参数错误',
+            404: '未找到相关数据'
+        }
+    )
+    def post(self, request):
+        case_code = request.data.get('case_code')
+        template_code = request.data.get('template_code')
+        if not case_code or not template_code:
+            return Response({
+                'code': 400,
+                'msg': '请提供case_code和template_code',
+                'data': None
+            }, status=400)
+        from .models import Case, DataTemplate, DataTable, Dictionary
+        try:
+            case = Case.objects.get(case_code=case_code)
+            template = DataTemplate.objects.get(template_code=template_code)
+        except (Case.DoesNotExist, DataTemplate.DoesNotExist):
+            return Response({
+                'code': 404,
+                'msg': '未找到相关病例或模板',
+                'data': None
+            }, status=404)
+        # 查找所有该病例下该模板的数据
+        data_tables = DataTable.objects.filter(case=case, data_template=template).select_related('dictionary')
+        if not data_tables.exists():
+            return Response({
+                'code': 404,
+                'msg': '未找到相关数据',
+                'data': None
+            }, status=404)
+        # 取检查时间（所有数据一致，取第一个即可）
+        check_time = data_tables[0].check_time.strftime('%Y-%m-%d %H:%M') if data_tables[0].check_time else None
+        items = []
+        for dt in data_tables:
+            items.append({
+                'word_code': dt.dictionary.word_code,
+                'word_name': dt.dictionary.word_name,
+                'value': dt.value
+            })
+        return Response({
+            'code': 200,
+            'msg': '操作成功',
+            'data': {
+                'template_name': template.template_name,
+                'check_time': check_time,
+                'items': items
+            }
+        })
