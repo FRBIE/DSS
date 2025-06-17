@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from rest_framework import serializers
 
 class DictionaryViewSet(CustomModelViewSet):
     """
@@ -526,6 +527,46 @@ class PatientMergedCaseListView(APIView):
     """
     pagination_class = StandardPagination
 
+    class PatientMergedCaseListPaginationSerializer(serializers.Serializer):
+        page = serializers.IntegerField(default=1, help_text="页码")
+        page_size = serializers.IntegerField(default=10, help_text="每页数量")
+
+    @swagger_auto_schema(
+        operation_description="获取患者列表，每个患者只展示一行，字段为所有病例中最新非空值。支持分页。",
+        query_serializer=PatientMergedCaseListPaginationSerializer,
+        responses={
+            200: openapi.Response(
+                description="成功返回患者列表数据",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "操作成功",
+                        "data": {
+                            "list": [
+                                {
+                                    "identity_id": "XXXXXXXXXXXXXX",
+                                    "name": "王XXX",
+                                    "gender": 0,
+                                    "birth_date": "1972-01-01",
+                                    "age": 52,
+                                    "case_id": 1,
+                                    "case_code": "XA568942",
+                                    "phone_number": "18956142356",
+                                    "home_address": "福建省厦门市XXXXXXXXXXXXX",
+                                    "blood_type": "O型",
+                                    "has_transplant_surgery": "是(2024-XX-XX)",
+                                    "is_in_transplant_queue": "否"
+                                }
+                            ],
+                            "total": 1,
+                            "page": 1,
+                            "page_size": 10
+                        }
+                    }
+                }
+            )
+        }
+    )
     def get(self, request):
         from collections import defaultdict
         from rest_framework.response import Response
