@@ -70,7 +70,7 @@ CREATE TABLE `case`  (
   `inhospital_id` varchar(255) NULL COMMENT '住院号',
   `name` varchar(255) NOT NULL COMMENT '姓名',
   `gender` tinyint(1) NOT NULL COMMENT '性别 0-女 1-男',
-  `birth_date` datetime NOT NULL COMMENT '出生年月日',
+  `birth_date` date NOT NULL COMMENT '出生年月日',
   `phone_number` varchar(36) NULL COMMENT '联系电话',
   `home_address` varchar(512) NULL COMMENT '家庭住址',
   `blood_type` varchar(10) NULL COMMENT '血型',
