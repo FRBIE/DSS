@@ -591,12 +591,15 @@ class DataTableSerializer(serializers.ModelSerializer):
         dictionary = Dictionary.objects.get(word_code=word_code)
 
         # 创建数据记录
-        return DataTable.objects.create(
+        instance = DataTable.objects.create(
             case=case,
             data_template=data_template,
             dictionary=dictionary,
             **validated_data
         )
+        
+        # 返回创建的实例，包含ID
+        return instance
 
 
 class ArchiveListSerializer(serializers.ModelSerializer):
@@ -710,16 +713,15 @@ class DataTableBulkCreateSerializer(serializers.Serializer):
             records = []
             for item in validated_data['data_list']:
                 dictionary = Dictionary.objects.get(word_code=item['word_code'])
-                records.append(
-                    DataTable(
-                        case=case,
-                        data_template=template,
-                        dictionary=dictionary,
-                        value=item['value'],
-                        check_time=item['check_time']
-                    )
+                record = DataTable.objects.create(
+                    case=case,
+                    data_template=template,
+                    dictionary=dictionary,
+                    value=item['value'],
+                    check_time=item['check_time']
                 )
-            return DataTable.objects.bulk_create(records)
+                records.append(record)
+            return records
 
     def to_representation(self, instance):
         # instance 是批量创建的记录列表

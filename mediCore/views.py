@@ -375,6 +375,23 @@ class DataTableViewSet(CustomModelViewSet):
     }
     ```
 
+    响应示例：
+    ```json
+    {
+        "code": 200,
+        "msg": "操作成功",
+        "data": {
+            "id": 123,
+            "case_code": "C000001",
+            "template_category": "分类1",
+            "template_name": "测试",
+            "word_name": "string",
+            "value": "检查值",
+            "check_time": "2025-05-25 14:30:00"
+        }
+    }
+    ```
+
     ### 2. 批量数据录入
     POST /api/data/
     
@@ -406,63 +423,33 @@ class DataTableViewSet(CustomModelViewSet):
     }
     ```
 
-    ### 3. 数据列表查询
-    GET /api/data/[?page=1&page_size=10][&case_code=C000001]
-    
-    响应格式：
+    响应示例：
     ```json
     {
         "code": 200,
         "msg": "操作成功",
         "data": {
-            "list": [
+            "message": "成功创建 2 条数据记录",
+            "data": [
                 {
-                    "id": 1,
+                    "id": 123,
                     "case_code": "C000001",
                     "template_category": "分类1",
                     "template_name": "测试",
                     "word_name": "string",
-                    "value": "检查值",
+                    "value": "值1",
                     "check_time": "2025-05-25 14:30:00"
+                },
+                {
+                    "id": 124,
+                    "case_code": "C000001",
+                    "template_category": "分类1",
+                    "template_name": "测试",
+                    "word_name": "string",
+                    "value": "值2",
+                    "check_time": "2025-05-25 15:30:00"
                 }
-            ],
-            "total": 4,
-            "page": 1,
-            "page_size": 10
-        }
-    }
-    ```
-
-    ### 4. 查询单条数据详情
-    GET /api/data/{id}/
-    
-    响应格式：
-    ```json
-    {
-        "code": 200,
-        "msg": "操作成功",
-        "data": {
-            "id": 1,
-            "case_code": "C000001",
-            "template_category": "分类1",
-            "template_name": "测试",
-            "word_name": "string",
-            "value": "检查值",
-            "check_time": "2025-05-25 14:30:00"
-        }
-    }
-    ```
-
-    ## 错误响应示例
-    ```json
-    {
-        "code": 400,
-        "msg": "请求参数错误",
-        "data": {
-            "case_code": ["病例编号不存在"],
-            "template_code": ["模板编号不存在"],
-            "word_code": ["词条编号不存在"],
-            "check_time": ["日期格式错误: xxx, 请使用YYYY-MM-DD HH:MM:SS格式"]
+            ]
         }
     }
     ```
@@ -484,6 +471,27 @@ class DataTableViewSet(CustomModelViewSet):
         if case_code:
             queryset = queryset.filter(case__case_code=case_code)
         return queryset.select_related('case', 'data_template', 'dictionary')
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        
+        # 如果是批量创建，直接返回序列化器的表示
+        if isinstance(instance, list):
+            return Response({
+                'code': 200,
+                'msg': '操作成功',
+                'data': serializer.data
+            })
+        
+        # 如果是单条创建，使用DataTableDetailSerializer序列化返回
+        detail_serializer = DataTableDetailSerializer(instance)
+        return Response({
+            'code': 200,
+            'msg': '操作成功',
+            'data': detail_serializer.data
+        })
 
 class DataTemplateCategoryViewSet(CustomModelViewSet):
     """
