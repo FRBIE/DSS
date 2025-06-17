@@ -12,6 +12,7 @@ import re
 import logging
 import csv
 import codecs
+
 WORD_CLASS_TO_PREFIX_MAP = {
     "数据类型": "C",
     "字典词条": "A",
@@ -25,6 +26,7 @@ WORD_CLASS_TO_PREFIX_MAP = {
     "检查类型": "EX",
 }
 
+logger = logging.getLogger(__name__)
 
 class DictionarySerializer(serializers.ModelSerializer):
     word_code = serializers.CharField(read_only=True, help_text='词条编号 (自动生成)')
@@ -108,7 +110,7 @@ class DataTemplateCategorySerializer(serializers.ModelSerializer):
             exists = DataTemplateCategory.objects.exclude(id=self.instance.id).filter(name=value).exists()
         else:  # 创建时直接检查
             exists = DataTemplateCategory.objects.filter(name=value).exists()
-        
+
         if exists:
             raise serializers.ValidationError('该分类名称已存在')
         return value
@@ -262,10 +264,16 @@ class CaseSerializer(CaseDetailSerializer):
         write_only=True,
         help_text='档案编号列表'
     )
+    archives = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True,
+        help_text='档案ID列表'
+    )
 
     class Meta(CaseDetailSerializer.Meta):
         model = Case
-        fields = CaseDetailSerializer.Meta.fields + ['identity', 'archive_codes']
+        fields = CaseDetailSerializer.Meta.fields + ['identity', 'archive_codes', 'archives']
 
     def get_birth_date_from_identity(self, identity_id):
         """从身份证号中提取出生日期"""
@@ -278,20 +286,19 @@ class CaseSerializer(CaseDetailSerializer):
             raise serializers.ValidationError({'identity': '身份证号格式不正确'})
 
     def validate(self, data):
-        logger = logging.getLogger(__name__)
         logger.info(f"开始验证数据: {data}")
 
         # 从身份证号获取出生日期
         identity_id = data.get('identity')
         if identity_id:
             birth_date_from_id = self.get_birth_date_from_identity(identity_id)
-            
+
             # 如果前端传了出生日期，验证是否一致
             if 'birth_date' in data:
                 logger.info(f"比较出生日期: 传入={data['birth_date']}, 身份证号中={birth_date_from_id}")
                 if data['birth_date'] != birth_date_from_id:
                     raise serializers.ValidationError({'birth_date': '出生日期与身份证号中的日期不符'})
-            
+
             # 使用身份证中的出生日期
             data['birth_date'] = birth_date_from_id
             logger.info(f"使用身份证号中的出生日期: {birth_date_from_id}")
@@ -301,9 +308,8 @@ class CaseSerializer(CaseDetailSerializer):
 
     def validate_identity(self, value):
         """验证身份证号格式"""
-        logger = logging.getLogger(__name__)
         logger.info(f"验证身份证号: {value}")
-        
+
         if not value or len(value) != 18:
             logger.error(f"无效的身份证号长度: {len(value) if value else 'None'}")
             raise serializers.ValidationError("请提供有效的18位身份证号")
@@ -311,21 +317,14 @@ class CaseSerializer(CaseDetailSerializer):
 
     def validate_archive_codes(self, value):
         """验证档案编号列表"""
-        logger = logging.getLogger(__name__)
         logger.info(f"验证档案编号列表: {value}")
-        
+
         if not value:
             return value
 
-        archive_ids = []
         invalid_codes = []
-
         for archive_code in value:
-            try:
-                archive = Archive.objects.get(archive_code=archive_code)
-                archive_ids.append(archive.id)
-                logger.info(f"找到档案: {archive_code} -> {archive.id}")
-            except Archive.DoesNotExist:
+            if not Archive.objects.filter(archive_code=archive_code).exists():
                 logger.error(f"未找到档案: {archive_code}")
                 invalid_codes.append(archive_code)
 
@@ -334,8 +333,8 @@ class CaseSerializer(CaseDetailSerializer):
             logger.error(error_msg)
             raise serializers.ValidationError(error_msg)
 
-        logger.info(f"档案编号验证完成，有效的档案ID: {archive_ids}")
-        return archive_ids
+        logger.info(f"档案编号验证完成: {value}")
+        return value
 
     def generate_case_code(self):
         """生成病例编号：C + 6位数字"""
@@ -372,101 +371,107 @@ class CaseSerializer(CaseDetailSerializer):
         raise serializers.ValidationError('无效的日期格式')
 
     def create(self, validated_data):
-        # 获取身份证号
-        identity_id = validated_data.pop('identity')
-        archive_codes = validated_data.pop('archive_codes', None)
-        archive_ids = validated_data.pop('archives', None)
+        from django.db import transaction
+        
+        logger.info("开始创建病例，数据: %s", validated_data)
+        
+        with transaction.atomic():
+            # 获取身份证号
+            identity_id = validated_data.pop('identity')
+            archive_codes = validated_data.pop('archive_codes', None)
+            archive_ids = validated_data.pop('archives', None)
+            
+            logger.info("处理档案关联 - 档案编号: %s, 档案ID: %s", archive_codes, archive_ids)
 
-        # 检查是否同时传入了archive_codes和archive_ids
-        if archive_codes and archive_ids:
-            # 获取archive_ids对应的archive_codes
-            archive_code_set = set(Archive.objects.filter(
-                id__in=archive_ids
-            ).values_list('archive_code', flat=True))
+            # 尝试获取已存在的Identity实例，如果不存在则创建新的
+            try:
+                identity_instance = Identity.objects.get(identity_id=identity_id)
+                logger.info("找到已存在的患者身份: %s", identity_instance)
+                # 更新Identity信息
+                for field in ['name', 'gender', 'birth_date']:
+                    if field in validated_data:
+                        setattr(identity_instance, field, validated_data[field])
+                identity_instance.save()
+            except Identity.DoesNotExist:
+                # 创建新的Identity实例
+                identity_data = {
+                    'identity_id': identity_id,
+                    'name': validated_data.get('name'),
+                    'gender': validated_data.get('gender'),
+                    'birth_date': validated_data.get('birth_date')
+                }
+                identity_instance = Identity.objects.create(**identity_data)
+                logger.info("创建新的患者身份: %s", identity_instance)
 
-            # 检查是否一致
-            if set(archive_codes) != archive_code_set:
-                raise serializers.ValidationError(
-                    {'archive_codes': '档案编号与档案ID不一致'}
-                )
+            # 设置Case的identity字段为Identity实例
+            validated_data['identity'] = identity_instance
+            # 生成病例编号
+            validated_data['case_code'] = self.generate_case_code()
+            logger.info("生成病例编号: %s", validated_data['case_code'])
 
-        # 优先使用archive_codes
-        archives_to_set = None
-        if archive_codes:
-            archives_to_set = Archive.objects.filter(archive_code__in=archive_codes)
-        elif archive_ids:
-            archives_to_set = Archive.objects.filter(id__in=archive_ids)
+            # 创建Case实例
+            instance = Case.objects.create(**validated_data)
+            logger.info("创建病例实例: %s", instance)
 
-        # 尝试获取已存在的Identity实例，如果不存在则创建新的
-        try:
-            identity_instance = Identity.objects.get(identity_id=identity_id)
-            # 更新Identity信息
-            for field in ['name', 'gender', 'birth_date']:
-                if field in validated_data:
-                    setattr(identity_instance, field, validated_data[field])
-            identity_instance.save()
-        except Identity.DoesNotExist:
-            # 创建新的Identity实例
-            identity_data = {
-                'identity_id': identity_id,
-                'name': validated_data.get('name'),
-                'gender': validated_data.get('gender'),
-                'birth_date': validated_data.get('birth_date')
-            }
-            identity_instance = Identity.objects.create(**identity_data)
+            # 处理档案关联
+            archives = []
+            
+            # 通过档案编号关联
+            if archive_codes:
+                archives_by_code = Archive.objects.filter(archive_code__in=archive_codes)
+                logger.info("通过档案编号找到的档案: %s", list(archives_by_code))
+                archives.extend(archives_by_code)
+                
+            # 通过档案ID关联
+            if archive_ids:
+                archives_by_id = Archive.objects.filter(id__in=archive_ids)
+                logger.info("通过档案ID找到的档案: %s", list(archives_by_id))
+                archives.extend(archives_by_id)
+                
+            # 用 set 建立多对多关系
+            if archives:
+                logger.info("设置病例与档案的多对多关系: %s", archives)
+                instance.archives.set(archives)
+            else:
+                logger.warning("没有找到任何档案记录")
 
-        # 设置Case的identity字段为Identity实例
-        validated_data['identity'] = identity_instance
-        # 生成病例编号
-        validated_data['case_code'] = self.generate_case_code()
-
-        # 创建Case实例
-        instance = super().create(validated_data)
-
-        # 处理档案关联
-        if archives_to_set:
-            instance.archives.set(archives_to_set)
-
-        return instance
+            return instance
 
     def update(self, instance, validated_data):
-        logger = logging.getLogger(__name__)
         logger.info(f"开始更新病例，病例编号: {instance.case_code}")
         logger.debug(f"全部更新数据: {validated_data}")
 
         # 处理档案关联
         archive_codes = validated_data.pop('archive_codes', None)
-        logger.info(f"档案编号: {archive_codes}")
+        archive_ids = validated_data.pop('archives', None)
+        logger.info(f"档案编号: {archive_codes}, 档案ID: {archive_ids}")
 
         try:
             # 更新基本字段
             for attr, value in validated_data.items():
                 logger.debug(f"更新字段 {attr}: {value}")
                 setattr(instance, attr, value)
-            
+
             # 确保实例保存成功
             instance.save()
             logger.info("基本字段更新完成")
 
-            # 如果提供了档案编号，更新档案关联
-            if archive_codes is not None:
-                try:
-                    logger.info(f"开始更新档案关联: {archive_codes}")
-                    # 获取档案实例
-                    archives = Archive.objects.filter(id__in=archive_codes)
-                    found_codes = [a.archive_code for a in archives]
-                    logger.info(f"找到以下档案: {found_codes}")
-                    
-                    # 更新多对多关系
-                    instance.archives.set(archives)
-                    logger.info("档案关联更新完成")
-                except Exception as e:
-                    logger.error(f"更新档案关联时出错: {str(e)}")
-                    raise serializers.ValidationError({'archive_codes': str(e)})
-
+            # 如果提供了档案编号或ID，更新档案关联
+            archives = []
+            if archive_codes:
+                archives_by_code = Archive.objects.filter(archive_code__in=archive_codes)
+                logger.info("通过档案编号找到的档案: %s", list(archives_by_code))
+                archives.extend(archives_by_code)
+            if archive_ids:
+                archives_by_id = Archive.objects.filter(id__in=archive_ids)
+                logger.info("通过档案ID找到的档案: %s", list(archives_by_id))
+                archives.extend(archives_by_id)
+            if archive_codes or archive_ids:
+                logger.info("设置病例与档案的多对多关系: %s", archives)
+                instance.archives.set(archives)
             logger.info("病例更新成功完成")
             return instance
-            
+
         except Exception as e:
             logger.error(f"更新病例时发生错误: {str(e)}")
             raise serializers.ValidationError(str(e))
@@ -694,21 +699,21 @@ class DictionaryBulkImportSerializer(serializers.Serializer):
     def create(self, validated_data):
         file = validated_data['file']
         reader = csv.DictReader(codecs.iterdecode(file, 'utf-8'))
-        
+
         # 验证CSV文件的列名
-        required_fields = ['word_name', 'word_eng', 'word_short', 'word_class', 
-                         'word_apply', 'word_belong', 'data_type']
+        required_fields = ['word_name', 'word_eng', 'word_short', 'word_class',
+                           'word_apply', 'word_belong', 'data_type']
         if not all(field in reader.fieldnames for field in required_fields):
             raise serializers.ValidationError("CSV文件格式不正确，请使用正确的模板")
 
         dictionaries = []
         errors = []
-        
+
         for row in reader:
             try:
                 # 过滤掉空字符串值，将其转换为None
                 row = {k: (v if v.strip() != '' else None) for k, v in row.items()}
-                
+
                 # 创建词条
                 dictionary = Dictionary.objects.create(
                     word_name=row['word_name'],
