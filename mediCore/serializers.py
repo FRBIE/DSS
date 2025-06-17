@@ -361,9 +361,14 @@ class CaseSerializer(CaseDetailSerializer):
             return value
         elif isinstance(value, str):
             try:
+                # 处理可能包含时间部分的日期字符串
+                if 'T' in value:
+                    return datetime.fromisoformat(value).date()
                 return datetime.strptime(value, '%Y-%m-%d').date()
             except ValueError:
                 raise serializers.ValidationError('日期格式错误，请使用YYYY-MM-DD格式')
+        elif isinstance(value, datetime):
+            return value.date()
         raise serializers.ValidationError('无效的日期格式')
 
     def create(self, validated_data):
