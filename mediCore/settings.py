@@ -205,7 +205,7 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': 'debug.log',
+            'filename': 'debug.txt',
             'formatter': 'verbose',
         },
     },
