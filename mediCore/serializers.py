@@ -366,6 +366,44 @@ class CaseSerializer(CaseDetailSerializer):
                 raise serializers.ValidationError('日期格式错误，请使用YYYY-MM-DD格式')
         raise serializers.ValidationError('无效的日期格式')
 
+    def create(self, validated_data):
+        # 获取身份证号
+        identity_id = validated_data.pop('identity')
+        archive_codes = validated_data.pop('archive_codes', None)
+
+        # 尝试获取已存在的Identity实例，如果不存在则创建新的
+        try:
+            identity_instance = Identity.objects.get(identity_id=identity_id)
+            # 更新Identity信息
+            for field in ['name', 'gender', 'birth_date']:
+                if field in validated_data:
+                    setattr(identity_instance, field, validated_data[field])
+            identity_instance.save()
+        except Identity.DoesNotExist:
+            # 创建新的Identity实例
+            identity_data = {
+                'identity_id': identity_id,
+                'name': validated_data.get('name'),
+                'gender': validated_data.get('gender'),
+                'birth_date': validated_data.get('birth_date')
+            }
+            identity_instance = Identity.objects.create(**identity_data)
+
+        # 设置Case的identity字段为Identity实例
+        validated_data['identity'] = identity_instance
+        # 生成病例编号
+        validated_data['case_code'] = self.generate_case_code()
+
+        # 创建Case实例
+        instance = super().create(validated_data)
+
+        # 处理档案关联
+        if archive_codes:
+            archives = Archive.objects.filter(archive_code__in=archive_codes)
+            instance.archives.set(archives)
+
+        return instance
+
     def update(self, instance, validated_data):
         logger = logging.getLogger(__name__)
         logger.info(f"开始更新病例，病例编号: {instance.case_code}")
