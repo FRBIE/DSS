@@ -375,6 +375,27 @@ class CaseSerializer(CaseDetailSerializer):
         # 获取身份证号
         identity_id = validated_data.pop('identity')
         archive_codes = validated_data.pop('archive_codes', None)
+        archive_ids = validated_data.pop('archives', None)
+
+        # 检查是否同时传入了archive_codes和archive_ids
+        if archive_codes and archive_ids:
+            # 获取archive_ids对应的archive_codes
+            archive_code_set = set(Archive.objects.filter(
+                id__in=archive_ids
+            ).values_list('archive_code', flat=True))
+
+            # 检查是否一致
+            if set(archive_codes) != archive_code_set:
+                raise serializers.ValidationError(
+                    {'archive_codes': '档案编号与档案ID不一致'}
+                )
+
+        # 优先使用archive_codes
+        archives_to_set = None
+        if archive_codes:
+            archives_to_set = Archive.objects.filter(archive_code__in=archive_codes)
+        elif archive_ids:
+            archives_to_set = Archive.objects.filter(id__in=archive_ids)
 
         # 尝试获取已存在的Identity实例，如果不存在则创建新的
         try:
@@ -403,9 +424,8 @@ class CaseSerializer(CaseDetailSerializer):
         instance = super().create(validated_data)
 
         # 处理档案关联
-        if archive_codes:
-            archives = Archive.objects.filter(archive_code__in=archive_codes)
-            instance.archives.set(archives)
+        if archives_to_set:
+            instance.archives.set(archives_to_set)
 
         return instance
 

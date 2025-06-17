@@ -229,7 +229,7 @@ class ArchiveCase(models.Model):
 
     class Meta:
         db_table = 'archive_case'
-        unique_together = (('archive', 'case'),)
+        unique_together = ('archive', 'case')
         verbose_name = '档案病例关联'
         verbose_name_plural = '档案与病例关联表'
 
