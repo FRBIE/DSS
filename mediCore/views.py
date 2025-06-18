@@ -231,7 +231,7 @@ class CaseViewSet(CustomModelViewSet):
     
     - **List**: GET /api/case/
       - 支持分页: ?page=1&page_size=10
-      - 支持搜索: ?search=xxx（可搜索：档案编号、身份证号、门诊号、住院号、姓名）
+      - 支持模糊搜索: ?search=xxx（可模糊搜索档案编号、身份证号、门诊号、住院号、姓名）
     
     - **Retrieve**: GET /api/case/{case_code}/
       - 返回病例详细信息，包括关联的档案
@@ -293,7 +293,7 @@ class IdentityViewSet(mixins.RetrieveModelMixin,
     患者信息会在创建病例时自动创建或更新。
 
     - **List**: GET /api/patient/
-      - 支持分页和搜索：?search=xxx（可搜索：身份证号、姓名）
+      - 支持分页和模糊搜索：?search=xxx（可模糊搜索身份证号、姓名）
     
     - **Retrieve**: GET /api/patient/{identity_id}/
       - 返回患者详情及其所有病例
@@ -306,15 +306,21 @@ class IdentityViewSet(mixins.RetrieveModelMixin,
     lookup_field = 'identity_id'
     pagination_class = StandardPagination
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        search = self.request.query_params.get('search', None)
-        if search:
-            return queryset.filter(
-                Q(identity_id__icontains=search) |
-                Q(name__icontains=search)
-            )
-        return queryset
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                'search', openapi.IN_QUERY, description="模糊搜索身份证号或姓名", type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'page', openapi.IN_QUERY, description="页码", type=openapi.TYPE_INTEGER
+            ),
+            openapi.Parameter(
+                'page_size', openapi.IN_QUERY, description="每页数量", type=openapi.TYPE_INTEGER
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -343,6 +349,16 @@ class IdentityViewSet(mixins.RetrieveModelMixin,
         # 序列化数据
         serializer = DataTableDetailSerializer(data_tables, many=True)
         return Response(serializer.data)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get('search', None)
+        if search:
+            return queryset.filter(
+                Q(identity_id__icontains=search) |
+                Q(name__icontains=search)
+            )
+        return queryset
 
 class DataTableViewSet(CustomModelViewSet):
     """
@@ -553,7 +569,7 @@ def bulk_import(self, request):
 
 class PatientMergedCaseListView(APIView):
     """
-    获取患者列表（每个患者只展示一行，字段为所有病例中最新非空值，支持分页）
+    获取患者列表（每个患者只展示一行，字段为所有病例中最新非空值，仅支持分页，不支持搜索）
     """
     pagination_class = StandardPagination
 
