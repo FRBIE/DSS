@@ -24,6 +24,7 @@ from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework import serializers
+from datetime import date
 
 class DictionaryViewSet(CustomModelViewSet):
     """
@@ -570,16 +571,40 @@ def bulk_import(self, request):
 class PatientMergedCaseListView(APIView):
     """
     获取患者列表（每个患者只展示一行，字段为所有病例中最新非空值，仅支持分页，不支持搜索）
+    支持通过档案编号筛选
     """
     pagination_class = StandardPagination
 
     class PatientMergedCaseListPaginationSerializer(serializers.Serializer):
         page = serializers.IntegerField(default=1, help_text="页码")
         page_size = serializers.IntegerField(default=10, help_text="每页数量")
+        archive_code = serializers.CharField(required=False, help_text="档案编号，用于筛选")
 
     @swagger_auto_schema(
-        operation_description="获取患者列表，每个患者只展示一行，字段为所有病例中最新非空值。支持分页。",
-        query_serializer=PatientMergedCaseListPaginationSerializer,
+        operation_description="获取患者列表，每个患者只展示一行，字段为所有病例中最新非空值。支持分页和档案编号筛选。",
+        manual_parameters=[
+            openapi.Parameter(
+                'page',
+                openapi.IN_QUERY,
+                description="页码",
+                type=openapi.TYPE_INTEGER,
+                default=1
+            ),
+            openapi.Parameter(
+                'page_size',
+                openapi.IN_QUERY,
+                description="每页数量",
+                type=openapi.TYPE_INTEGER,
+                default=10
+            ),
+            openapi.Parameter(
+                'archive_code',
+                openapi.IN_QUERY,
+                description="档案编号，用于筛选特定档案下的患者",
+                type=openapi.TYPE_STRING,
+                required=False
+            )
+        ],
         responses={
             200: openapi.Response(
                 description="成功返回患者列表数据",
@@ -610,51 +635,95 @@ class PatientMergedCaseListView(APIView):
                         }
                     }
                 }
+            ),
+            404: openapi.Response(
+                description="档案不存在",
+                examples={
+                    "application/json": {
+                        "code": 404,
+                        "msg": "未找到档案编号为 A000001 的档案",
+                        "data": None
+                    }
+                }
             )
         }
     )
     def get(self, request):
-        from collections import defaultdict
-        from rest_framework.response import Response
-        from .models import Case
+        # 获取查询参数
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        archive_code = request.query_params.get('archive_code')
 
-        # 1. 查出所有病例，按identity_id分组，id降序
-        all_cases = Case.objects.select_related('identity').order_by('identity_id', '-id')
-        patient_dict = defaultdict(list)
-        for case in all_cases:
-            patient_dict[case.identity.identity_id].append(case)
+        # 构建基础查询
+        queryset = Identity.objects.all()
 
-        result = []
-        for identity_id, cases in patient_dict.items():
-            identity = cases[0].identity  # 该患者的Identity对象
-            # 字段级别合并
-            def get_latest_non_empty(attr):
-                for c in cases:
-                    val = getattr(c, attr)
-                    if val not in [None, '', '未填写']:
-                        return val
-                return None
+        # 如果提供了档案编号，进行筛选
+        if archive_code:
+            try:
+                archive = Archive.objects.get(archive_code=archive_code)
+                # 获取该档案下的所有病例的身份证号
+                identity_ids = Case.objects.filter(
+                    archives=archive
+                ).values_list('identity_id', flat=True).distinct()
+                queryset = queryset.filter(identity_id__in=identity_ids)
+            except Archive.DoesNotExist:
+                return Response({
+                    'code': 404,
+                    'msg': f'未找到档案编号为 {archive_code} 的档案',
+                    'data': None
+                })
 
-            latest_case = cases[0]  # id最大
-            result.append({
+        # 获取所有符合条件的患者
+        patients = []
+        for identity in queryset:
+            # 获取该患者的所有病例
+            cases = Case.objects.filter(identity=identity)
+            
+            # 如果提供了档案编号，只获取该档案下的病例
+            if archive_code:
+                cases = cases.filter(archives__archive_code=archive_code)
+
+            if not cases.exists():
+                continue
+
+            # 获取最新病例
+            latest_case = cases.order_by('-id').first()
+
+            # 构建患者数据
+            patient_data = {
                 'identity_id': identity.identity_id,
                 'name': identity.name,
                 'gender': identity.gender,
                 'birth_date': identity.birth_date,
+                'age': (date.today().year - identity.birth_date.year) - 
+                      ((date.today().month, date.today().day) < 
+                       (identity.birth_date.month, identity.birth_date.day)),
                 'case_id': latest_case.id,
                 'case_code': latest_case.case_code,
-                'phone_number': get_latest_non_empty('phone_number'),
-                'home_address': get_latest_non_empty('home_address'),
-                'blood_type': get_latest_non_empty('blood_type'),
-                'has_transplant_surgery': get_latest_non_empty('has_transplant_surgery'),
-                'is_in_transplant_queue': get_latest_non_empty('is_in_transplant_queue'),
-            })
+                'phone_number': latest_case.phone_number,
+                'home_address': latest_case.home_address,
+                'blood_type': latest_case.blood_type,
+                'has_transplant_surgery': latest_case.has_transplant_surgery,
+                'is_in_transplant_queue': latest_case.is_in_transplant_queue
+            }
+            patients.append(patient_data)
 
-        # 分页
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(result, request, view=self)
-        serializer = PatientMergedCaseSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        # 分页处理
+        total = len(patients)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_patients = patients[start:end]
+
+        return Response({
+            'code': 200,
+            'msg': '操作成功',
+            'data': {
+                'list': paginated_patients,
+                'total': total,
+                'page': page,
+                'page_size': page_size
+            }
+        })
 
 class CaseTemplateSummaryView(APIView):
     """
