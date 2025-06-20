@@ -806,7 +806,7 @@ class CaseVisualizationOptionSerializer(serializers.Serializer):
     word_name = serializers.CharField(help_text="词条名称")
 
 class CaseVisualizationDataPointSerializer(serializers.Serializer):
-    check_time = serializers.DateTimeField(help_text="检查时间")
+    check_time = serializers.DateField(help_text="检查时间")
     value = serializers.CharField(help_text="数据值")
 
 class CaseVisualizationDataSerializer(serializers.Serializer):
