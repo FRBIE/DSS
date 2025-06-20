@@ -806,8 +806,14 @@ class CaseVisualizationOptionSerializer(serializers.Serializer):
     word_name = serializers.CharField(help_text="词条名称")
 
 class CaseVisualizationDataPointSerializer(serializers.Serializer):
-    check_time = serializers.DateField(help_text="检查时间")
+    check_time = serializers.SerializerMethodField(help_text="检查时间")
     value = serializers.CharField(help_text="数据值")
+
+    def get_check_time(self, obj):
+        dt = obj['check_time'] if isinstance(obj, dict) else getattr(obj, 'check_time', None)
+        if hasattr(dt, 'date'):
+            return dt.date()
+        return dt
 
 class CaseVisualizationDataSerializer(serializers.Serializer):
     word_code = serializers.CharField(help_text="词条编号")
