@@ -603,6 +603,13 @@ class PatientMergedCaseListView(APIView):
                 description="档案编号，用于筛选特定档案下的患者",
                 type=openapi.TYPE_STRING,
                 required=False
+            ),
+            openapi.Parameter(
+                'search',
+                openapi.IN_QUERY,
+                description="模糊搜索患者姓名或身份证号",
+                type=openapi.TYPE_STRING,
+                required=False
             )
         ],
         responses={
@@ -653,6 +660,7 @@ class PatientMergedCaseListView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 10))
         archive_code = request.query_params.get('archive_code')
+        search = request.query_params.get('search')
 
         # 构建基础查询
         queryset = Identity.objects.all()
@@ -672,6 +680,12 @@ class PatientMergedCaseListView(APIView):
                     'msg': f'未找到档案编号为 {archive_code} 的档案',
                     'data': None
                 })
+
+        # 如果提供了search参数，进行姓名或身份证号模糊查询
+        if search:
+            queryset = queryset.filter(
+                Q(identity_id__icontains=search) | Q(name__icontains=search)
+            )
 
         # 获取所有符合条件的患者
         patients = []
