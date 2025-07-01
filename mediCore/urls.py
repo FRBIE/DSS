@@ -12,7 +12,7 @@ from .views import (
     DictionaryViewSet, DataTemplateViewSet, ArchiveViewSet, CaseViewSet,
     IdentityViewSet, DataTableViewSet, DataTemplateCategoryViewSet
 )
-from mediCore.views import PatientMergedCaseListView, CaseTemplateSummaryView, CaseTemplateDetailView, CaseVisualizationOptionsView, CaseVisualizationDataView
+from mediCore.views import PatientMergedCaseListView, CaseTemplateSummaryView, CaseTemplateDetailView, CaseVisualizationDataView, CaseVisualizationYAxisTimesView, CaseVisualizationXAxisOptionsView
 
 # 创建路由
 router = DefaultRouter()
@@ -58,6 +58,7 @@ urlpatterns = [
     path('api/patient-merged-case/', PatientMergedCaseListView.as_view(), name='patient-merged-case'),
     path('api/case-template-summary/', CaseTemplateSummaryView.as_view(), name='case-template-summary'),
     path('api/case-template-detail/', CaseTemplateDetailView.as_view(), name='case-template-detail'),
-    path('api/case-visualization-options/', CaseVisualizationOptionsView.as_view(), name='case-visualization-options'),
     path('api/case-visualization-data/', CaseVisualizationDataView.as_view(), name='case-visualization-data'),
+    path('api/case-visualization-yaxis-times/', CaseVisualizationYAxisTimesView.as_view(), name='case-visualization-yaxis-times'),
+    path('api/case-visualization-xaxis-options/', CaseVisualizationXAxisOptionsView.as_view(), name='case-visualization-xaxis-options'),
 ]
