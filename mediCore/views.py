@@ -629,7 +629,7 @@ class PatientMergedCaseListView(APIView):
                                     "birth_date": "1972-01-01",
                                     "age": 52,
                                     "case_id": 1,
-                                    "case_code": "XA568942",
+                                    "case_code": "C000001",
                                     "phone_number": "18956142356",
                                     "home_address": "福建省厦门市XXXXXXXXXXXXX",
                                     "blood_type": "O型",
@@ -763,7 +763,7 @@ class CaseTemplateSummaryView(APIView):
                 )
             },
             example={
-                'case_codes': ['XA568942', 'XA584523']
+                'case_codes': ['C000001', 'C000002']
             }
         ),
         responses={
@@ -894,7 +894,7 @@ class CaseTemplateDetailView(APIView):
                 'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间，格式YYYY-MM-DD HH:MM:SS')
             },
             example={
-                'case_code': 'XA568942',
+                'case_code': 'C000001',
                 'template_code': 'T000001',
                 'check_time': '2024-06-01 12:21:00'
             }
@@ -1006,7 +1006,7 @@ class CaseVisualizationDataView(APIView):
             },
             example={
                 'case_code': 'C000001',
-                'x_axis_word_code': ['TES000001'],
+                'x_axis_word_code': ['TES000018'],
                 'y_axis_times': [
                     '2025-06-18 04:36:00',
                     '2025-06-19 04:41:00',
