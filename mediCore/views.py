@@ -25,6 +25,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework import serializers
 from datetime import date
+from django.utils.dateparse import parse_datetime
 
 class DictionaryViewSet(CustomModelViewSet):
     """
@@ -743,11 +744,14 @@ class CaseTemplateSummaryView(APIView):
     """
     接收一个或多个case_code，返回这些病例的所有数据模板下的数据，
     包含模板分类、模板名称、模板编号、检查时间。
+    
+    注意：同一模板下不同的检查时间会分别返回，每个（模板，检查时间）组合为一条数据。
+    检查时间精确到时分秒（YYYY-MM-DD HH:MM:SS）。
     """
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="传入一个或多个病例编号（case_code），返回这些病例的所有数据模板下的数据，包含模板分类、模板名称、模板编号、检查时间。",
+        operation_description="传入一个或多个病例编号（case_code），返回这些病例的所有数据模板下的数据，包含模板分类、模板名称、模板编号、检查时间。\n\n注意：同一模板下不同的检查时间会分别返回，每个（模板，检查时间）组合为一条数据。\n\n检查时间精确到时分秒（YYYY-MM-DD HH:MM:SS）。",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['case_codes'],
@@ -776,12 +780,17 @@ class CaseTemplateSummaryView(APIView):
                                     {
                                         "template_name": "血常规",
                                         "template_code": "T000001",
-                                        "check_time": "2024-06-01"
+                                        "check_time": "2024-06-01 12:21:00"
+                                    },
+                                    {
+                                        "template_name": "血常规",
+                                        "template_code": "T000001",
+                                        "check_time": "2024-06-02 09:30:00"
                                     },
                                     {
                                         "template_name": "凝血四项",
                                         "template_code": "T000002",
-                                        "check_time": "2024-06-02"
+                                        "check_time": "2024-06-01 08:00:00"
                                     }
                                 ]
                             },
@@ -791,7 +800,7 @@ class CaseTemplateSummaryView(APIView):
                                     {
                                         "template_name": "胸部CT",
                                         "template_code": "T000003",
-                                        "check_time": "2024-06-03"
+                                        "check_time": "2024-06-03 15:00:00"
                                     }
                                 ]
                             }
@@ -828,31 +837,35 @@ class CaseTemplateSummaryView(APIView):
             'data_template', 'data_template__category'
         )
 
-        # 组装分组结构: 分类->模板->检查时间
+        # 组装分组结构: 分类->模板+检查时间
         result = {}
         for dt in data_tables:
             category = dt.data_template.category.name if dt.data_template and dt.data_template.category else None
             template_name = dt.data_template.template_name if dt.data_template else None
             template_code = dt.data_template.template_code if dt.data_template else None
-            check_time = dt.check_time.strftime('%Y-%m-%d') if dt.check_time else None
+            check_time = dt.check_time.strftime('%Y-%m-%d %H:%M:%S') if dt.check_time else None
             if not (category and template_name and template_code and check_time):
                 continue
             if category not in result:
-                result[category] = {}
-            if template_code not in result[category]:
-                result[category][template_code] = {
+                result[category] = []
+            # 判断同一模板同一检查时间是否已存在
+            exists = any(
+                t['template_code'] == template_code and t['check_time'] == check_time
+                for t in result[category]
+            )
+            if not exists:
+                result[category].append({
                     'template_name': template_name,
                     'template_code': template_code,
                     'check_time': check_time
-                }
-            # 如果同一模板下有多条数据，检查时间只保留第一个（你保证只有一个）
+                })
 
         # 转换为前端需要的结构
         data = []
         for category, templates in result.items():
             data.append({
                 'template_category': category,
-                'templates': list(templates.values())
+                'templates': templates
             })
 
         return Response({
@@ -863,22 +876,27 @@ class CaseTemplateSummaryView(APIView):
 
 class CaseTemplateDetailView(APIView):
     """
-    查询某病例下某模板的所有词条及其值（详情）。
+    查询某病例下某模板某次检查的所有词条及其值（详情）。
+    
+    现在需要传入case_code、template_code和check_time三者，唯一确定一次检查。
+    检查时间精确到时分秒（YYYY-MM-DD HH:MM:SS）。
     """
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="传入病例编号和模板编号，返回该病例下该模板的所有词条及其值、检查时间、模板名称。",
+        operation_description="传入病例编号、模板编号和检查时间，返回该病例下该模板该次检查的所有词条及其值、检查时间、模板名称。\n\n注意：check_time为必填，精确到时分秒。",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['case_code', 'template_code'],
+            required=['case_code', 'template_code', 'check_time'],
             properties={
                 'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
-                'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号')
+                'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号'),
+                'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间，格式YYYY-MM-DD HH:MM:SS')
             },
             example={
                 'case_code': 'XA568942',
-                'template_code': 'T000001'
+                'template_code': 'T000001',
+                'check_time': '2024-06-01 12:21:00'
             }
         ),
         responses={
@@ -890,7 +908,7 @@ class CaseTemplateDetailView(APIView):
                         "msg": "操作成功",
                         "data": {
                             "template_name": "血常规",
-                            "check_time": "2024-06-01 12:21",
+                            "check_time": "2024-06-01 12:21:00",
                             "items": [
                                 {"word_code": "A000001", "word_name": "白细胞", "value": "5.6"},
                                 {"word_code": "A000002", "word_name": "红细胞", "value": "4.2"}
@@ -906,13 +924,15 @@ class CaseTemplateDetailView(APIView):
     def post(self, request):
         case_code = request.data.get('case_code')
         template_code = request.data.get('template_code')
-        if not case_code or not template_code:
+        check_time = request.data.get('check_time')
+        if not case_code or not template_code or not check_time:
             return Response({
                 'code': 400,
-                'msg': '请提供case_code和template_code',
+                'msg': '请提供case_code、template_code和check_time',
                 'data': None
             }, status=400)
         from .models import Case, DataTemplate, DataTable, Dictionary
+        from django.utils.dateparse import parse_datetime
         try:
             case = Case.objects.get(case_code=case_code)
             template = DataTemplate.objects.get(template_code=template_code)
@@ -922,16 +942,25 @@ class CaseTemplateDetailView(APIView):
                 'msg': '未找到相关病例或模板',
                 'data': None
             }, status=404)
-        # 查找所有该病例下该模板的数据
-        data_tables = DataTable.objects.filter(case=case, data_template=template).select_related('dictionary')
+        # 检查时间精确过滤
+        try:
+            dt_check_time = parse_datetime(check_time)
+        except Exception:
+            dt_check_time = None
+        if not dt_check_time:
+            return Response({
+                'code': 400,
+                'msg': 'check_time格式错误，需为YYYY-MM-DD HH:MM:SS',
+                'data': None
+            }, status=400)
+        # 查找所有该病例下该模板该检查时间的数据
+        data_tables = DataTable.objects.filter(case=case, data_template=template, check_time=dt_check_time).select_related('dictionary')
         if not data_tables.exists():
             return Response({
                 'code': 404,
                 'msg': '未找到相关数据',
                 'data': None
             }, status=404)
-        # 取检查时间（所有数据一致，取第一个即可）
-        check_time = data_tables[0].check_time.strftime('%Y-%m-%d %H:%M') if data_tables[0].check_time else None
         items = []
         for dt in data_tables:
             items.append({
@@ -1038,7 +1067,6 @@ class CaseVisualizationOptionsView(APIView):
             }
         })
 
-
 class CaseVisualizationDataView(APIView):
     """
     根据选择的X轴和Y轴，返回对应的数据值。
@@ -1133,7 +1161,6 @@ class CaseVisualizationDataView(APIView):
             try:
                 dictionary = Dictionary.objects.get(word_code=y_word_code, data_type='数值类型')
             except Dictionary.DoesNotExist:
-                # Skip if dictionary not found or not a numeric type
                 continue
 
             # 获取该病例、该词条的所有数据点，并根据选择的X轴日期进行过滤
