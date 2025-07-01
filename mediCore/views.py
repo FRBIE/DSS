@@ -1186,12 +1186,14 @@ class CaseVisualizationXAxisOptionsView(APIView):
         operation_description="根据病例编号查询X轴选项（所有有数据的时间点，精确到秒）",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['case_code'],
+            required=['case_code', 'y_axis_word_code'],
             properties={
                 'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
+                'y_axis_word_code': openapi.Schema(type=openapi.TYPE_STRING, description='Y轴选中的词条编号'),
             },
             example={
-                'case_code': 'C000001'
+                'case_code': 'C000001',
+                'y_axis_word_code': 'TES000018'
             }
         ),
         responses={
