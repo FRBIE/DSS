@@ -980,39 +980,39 @@ class CaseTemplateDetailView(APIView):
 
 class CaseVisualizationDataView(APIView):
     """
-    根据选择的X轴和Y轴，返回对应的数据值。
+    根据选择的X轴（时间）和Y轴（词条编号），返回对应的数据值。
     X轴数据来源：从data表获取所有数据，取出这些数据的检查时间。
     Y轴数据来源：从data表获取所有数据，根据dictionary_id找出这些词条名称，过滤条件是该词条的data_type为数值类型。
     """
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="根据选择的X轴和Y轴，返回对应的数据值。",
+        operation_description="根据选择的X轴（时间）和Y轴（词条编号），返回对应的数据值。",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['case_code', 'x_axis_word_code', 'y_axis_times'],
+            required=['case_code', 'x_axis_times', 'y_axis_word_codes'],
             properties={
                 'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
-                'x_axis_word_code': openapi.Schema(
+                'x_axis_times': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Items(type=openapi.TYPE_STRING),
-                    description='X轴词条编号数组，例如["TES000001"]'
+                    description='X轴时间数组，例如["2025-06-18 04:36:00", "2025-06-19 04:41:00"]'
                 ),
-                'y_axis_times': openapi.Schema(
+                'y_axis_word_codes': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Items(type=openapi.TYPE_STRING),
-                    description='Y轴时间数组，例如["2025-06-18 04:36:00", "2025-06-19 04:41:00"]'
+                    description='Y轴词条编号数组，例如["TES000018", "TES000019"]'
                 )
             },
             example={
                 'case_code': 'C000001',
-                'x_axis_word_code': ['TES000018'],
-                'y_axis_times': [
+                'x_axis_times': [
                     '2025-06-18 04:36:00',
                     '2025-06-19 04:41:00',
                     '2025-06-20 04:17:00',
                     '2025-06-22 04:25:00'
-                ]
+                ],
+                'y_axis_word_codes': ['TES000018']
             }
         ),
         responses={
@@ -1024,19 +1024,11 @@ class CaseVisualizationDataView(APIView):
                         "msg": "操作成功",
                         "data": [
                             {
-                                "word_code": "A000001",
+                                "word_code": "TES000018",
                                 "word_name": "白细胞",
                                 "data_points": [
-                                    {"check_time": "2024-06-01T10:00:00Z", "value": "5.6"},
-                                    {"check_time": "2024-06-02T10:00:00Z", "value": "6.1"}
-                                ]
-                            },
-                            {
-                                "word_code": "A000002",
-                                "word_name": "红细胞",
-                                "data_points": [
-                                    {"check_time": "2024-06-01T10:00:00Z", "value": "4.2"},
-                                    {"check_time": "2024-06-02T10:00:00Z", "value": "4.5"}
+                                    {"check_time": "2025-06-18 04:36:00", "value": "5.6"},
+                                    {"check_time": "2025-06-19 04:41:00", "value": "6.1"}
                                 ]
                             }
                         ]
@@ -1049,53 +1041,59 @@ class CaseVisualizationDataView(APIView):
     )
     def post(self, request):
         case_code = request.data.get('case_code')
-        x_axis_word_code = request.data.get('x_axis_word_code', [])
-        y_axis_times = request.data.get('y_axis_times', [])
+        x_axis_times = request.data.get('x_axis_times', [])
+        y_axis_word_codes = request.data.get('y_axis_word_codes', [])
 
-        if not case_code or not x_axis_word_code or not y_axis_times:
+        if not case_code or not x_axis_times or not y_axis_word_codes:
             return Response({
                 'code': 400,
-                'msg': '请提供case_code, x_axis_word_code和y_axis_times',
+                'msg': '请提供case_code, x_axis_times和y_axis_word_codes',
                 'data': None
             }, status=400)
 
         from .models import Case, DataTable, Dictionary
         from .serializers import CaseVisualizationDataSerializer
+        from django.utils.dateparse import parse_datetime
 
         try:
             case = Case.objects.get(case_code=case_code)
-            dictionary = Dictionary.objects.get(word_code=x_axis_word_code[0], data_type='数值类型')
-        except (Case.DoesNotExist, Dictionary.DoesNotExist):
+        except Case.DoesNotExist:
             return Response({
                 'code': 404,
-                'msg': '未找到相关病例或词条',
+                'msg': '未找到相关病例',
                 'data': None
             }, status=404)
 
-        # 将y_axis_times字符串转为datetime
-        y_axis_datetimes = [parse_datetime(t) for t in y_axis_times if parse_datetime(t)]
+        # 将x_axis_times字符串转为datetime
+        x_axis_datetimes = [parse_datetime(t) for t in x_axis_times if parse_datetime(t)]
 
-        # 获取该病例、该词条在这些时间点的数据
-        data_points_queryset = DataTable.objects.filter(
-            case=case,
-            dictionary=dictionary,
-            check_time__in=y_axis_datetimes
-        ).order_by('check_time')
+        result_data = []
+        for y_word_code in y_axis_word_codes:
+            try:
+                dictionary = Dictionary.objects.get(word_code=y_word_code, data_type='数值类型')
+            except Dictionary.DoesNotExist:
+                continue
+            # 获取该病例、该词条在这些时间点的数据
+            data_points_queryset = DataTable.objects.filter(
+                case=case,
+                dictionary=dictionary,
+                check_time__in=x_axis_datetimes
+            ).order_by('check_time')
 
-        data_points = []
-        for dp in data_points_queryset:
-            data_points.append({
-                'check_time': dp.check_time.strftime('%Y-%m-%d %H:%M:%S') if dp.check_time else None,
-                'value': dp.value
+            data_points = []
+            for dp in data_points_queryset:
+                data_points.append({
+                    'check_time': dp.check_time.strftime('%Y-%m-%d %H:%M:%S') if dp.check_time else None,
+                    'value': dp.value
+                })
+
+            result_data.append({
+                'word_code': dictionary.word_code,
+                'word_name': dictionary.word_name,
+                'data_points': data_points
             })
 
-        result_data = [{
-            'word_code': dictionary.word_code,
-            'word_name': dictionary.word_name,
-            'data_points': data_points
-        }]
-
-        if not data_points:
+        if not result_data:
             return Response({
                 'code': 404,
                 'msg': '未找到符合条件的图表数据',
