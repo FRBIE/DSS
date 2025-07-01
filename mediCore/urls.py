@@ -59,6 +59,6 @@ urlpatterns = [
     path('api/case-template-summary/', CaseTemplateSummaryView.as_view(), name='case-template-summary'),
     path('api/case-template-detail/', CaseTemplateDetailView.as_view(), name='case-template-detail'),
     path('api/case-visualization-data/', CaseVisualizationDataView.as_view(), name='case-visualization-data'),
-    path('api/case-visualization-yaxis-times/', CaseVisualizationYAxisTimesView.as_view(), name='case-visualization-yaxis-times'),
+    path('api/case-visualization-yaxis-options/', CaseVisualizationYAxisTimesView.as_view(), name='case-visualization-yaxis-options'),
     path('api/case-visualization-xaxis-options/', CaseVisualizationXAxisOptionsView.as_view(), name='case-visualization-xaxis-options'),
 ]

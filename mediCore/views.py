@@ -1110,83 +1110,12 @@ class CaseVisualizationDataView(APIView):
 
 class CaseVisualizationYAxisTimesView(APIView):
     """
-    根据病例编号和X轴选中的词条编号，查询所有涉及到的数据的check_time，作为Y轴可选时间。
+    根据病例编号查询Y轴选项（所有数值型词条）。
     """
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="根据病例编号和X轴选中的词条编号，查询所有涉及到的数据的check_time，作为Y轴可选时间。",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['case_code', 'x_axis_word_code'],
-            properties={
-                'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
-                'x_axis_word_code': openapi.Schema(type=openapi.TYPE_STRING, description='X轴选中的词条编号'),
-            },
-            example={
-                'case_code': 'C000001',
-                'x_axis_word_code': 'TES000018',
-            }
-        ),
-        responses={
-            200: openapi.Response(
-                description="成功返回所有涉及到的数据的check_time",
-                examples={
-                    "application/json": {
-                        "code": 200,
-                        "msg": "操作成功",
-                        "data": ["2024-06-01 12:21:00", "2024-06-02 09:30:00"]
-                    }
-                }
-            ),
-            400: '参数错误',
-            404: '未找到相关数据'
-        }
-    )
-    def post(self, request):
-        case_code = request.data.get('case_code')
-        x_axis_word_code = request.data.get('x_axis_word_code')
-        if not case_code or not x_axis_word_code:
-            return Response({
-                'code': 400,
-                'msg': '请提供case_code和x_axis_word_code',
-                'data': None
-            }, status=400)
-
-        from .models import Case, DataTable, Dictionary
-        try:
-            case = Case.objects.get(case_code=case_code)
-            dictionary = Dictionary.objects.get(word_code=x_axis_word_code, data_type='数值类型')
-        except (Case.DoesNotExist, Dictionary.DoesNotExist):
-            return Response({
-                'code': 404,
-                'msg': '未找到相关病例或词条',
-                'data': None
-            }, status=404)
-
-        # 查询所有涉及到的数据的check_time
-        check_times = DataTable.objects.filter(
-            case=case,
-            dictionary=dictionary
-        ).values_list('check_time', flat=True).distinct().order_by('check_time')
-
-        # 格式化为字符串
-        check_time_list = [ct.strftime('%Y-%m-%d %H:%M:%S') for ct in check_times if ct]
-
-        return Response({
-            'code': 200,
-            'msg': '操作成功',
-            'data': check_time_list
-        })
-
-class CaseVisualizationXAxisOptionsView(APIView):
-    """
-    根据病例编号查询X轴选项（所有数值型词条）。
-    """
-    permission_classes = [AllowAny]
-
-    @swagger_auto_schema(
-        operation_description="根据病例编号查询X轴选项（所有数值型词条）",
+        operation_description="根据病例编号查询Y轴选项（所有数值型词条）",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['case_code'],
@@ -1199,17 +1128,15 @@ class CaseVisualizationXAxisOptionsView(APIView):
         ),
         responses={
             200: openapi.Response(
-                description="成功返回X轴选项",
+                description="成功返回Y轴选项（所有数值型词条）",
                 examples={
                     "application/json": {
                         "code": 200,
                         "msg": "操作成功",
-                        "data": {
-                            "x_axis_options": [
-                                {"word_code": "A000001", "word_name": "白细胞"},
-                                {"word_code": "A000002", "word_name": "红细胞"}
-                            ]
-                        }
+                        "data": [
+                            {"word_code": "A000001", "word_name": "白细胞"},
+                            {"word_code": "A000002", "word_name": "红细胞"}
+                        ]
                     }
                 }
             ),
@@ -1228,7 +1155,6 @@ class CaseVisualizationXAxisOptionsView(APIView):
 
         from .models import Case, Dictionary
         from .serializers import CaseVisualizationOptionSerializer
-
         try:
             case = Case.objects.get(case_code=case_code)
         except Case.DoesNotExist:
@@ -1238,12 +1164,78 @@ class CaseVisualizationXAxisOptionsView(APIView):
                 'data': None
             }, status=404)
 
-        x_axis_dictionaries = Dictionary.objects.filter(
+        y_axis_dictionaries = Dictionary.objects.filter(
             datatable__case=case,
             data_type='数值类型'
         ).distinct()
+        y_axis_options = CaseVisualizationOptionSerializer(y_axis_dictionaries, many=True).data
 
-        x_axis_options = CaseVisualizationOptionSerializer(x_axis_dictionaries, many=True).data
+        return Response({
+            'code': 200,
+            'msg': '操作成功',
+            'data': y_axis_options
+        })
+
+class CaseVisualizationXAxisOptionsView(APIView):
+    """
+    根据病例编号查询X轴选项（所有有数据的时间点，精确到秒）。
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="根据病例编号查询X轴选项（所有有数据的时间点，精确到秒）",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['case_code'],
+            properties={
+                'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
+            },
+            example={
+                'case_code': 'C000001'
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功返回X轴选项（所有有数据的时间点）",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "操作成功",
+                        "data": {
+                            "x_axis_options": [
+                                "2025-06-18 04:36:00",
+                                "2025-06-19 04:41:00"
+                            ]
+                        }
+                    }
+                }
+            ),
+            400: '参数错误',
+            404: '未找到相关数据'
+        }
+    )
+    def post(self, request):
+        case_code = request.data.get('case_code')
+        if not case_code:
+            return Response({
+                'code': 400,
+                'msg': '请提供case_code',
+                'data': None
+            }, status=400)
+
+        from .models import Case, DataTable
+        try:
+            case = Case.objects.get(case_code=case_code)
+        except Case.DoesNotExist:
+            return Response({
+                'code': 404,
+                'msg': '未找到相关病例',
+                'data': None
+            }, status=404)
+
+        # 查询所有有数据的check_time
+        check_times = DataTable.objects.filter(case=case).values_list('check_time', flat=True).distinct().order_by('check_time')
+        x_axis_options = [ct.strftime('%Y-%m-%d %H:%M:%S') for ct in check_times if ct]
 
         return Response({
             'code': 200,
