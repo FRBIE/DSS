@@ -629,7 +629,7 @@ class PatientMergedCaseListView(APIView):
                                     "birth_date": "1972-01-01",
                                     "age": 52,
                                     "case_id": 1,
-                                    "case_code": "C000001",
+                                    "case_code": "XA568942",
                                     "phone_number": "18956142356",
                                     "home_address": "福建省厦门市XXXXXXXXXXXXX",
                                     "blood_type": "O型",
@@ -1085,7 +1085,7 @@ class CaseVisualizationDataView(APIView):
         data_points = []
         for dp in data_points_queryset:
             data_points.append({
-                'check_time': dp.check_time,
+                'check_time': dp.check_time.strftime('%Y-%m-%d %H:%M:%S') if dp.check_time else None,
                 'value': dp.value
             })
 
