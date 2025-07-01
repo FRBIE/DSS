@@ -1216,25 +1216,27 @@ class CaseVisualizationXAxisOptionsView(APIView):
     )
     def post(self, request):
         case_code = request.data.get('case_code')
-        if not case_code:
+        y_axis_word_code = request.data.get('y_axis_word_code')
+        if not case_code or not y_axis_word_code:
             return Response({
                 'code': 400,
-                'msg': '请提供case_code',
+                'msg': '请提供case_code和y_axis_word_code',
                 'data': None
             }, status=400)
 
-        from .models import Case, DataTable
+        from .models import Case, DataTable, Dictionary
         try:
             case = Case.objects.get(case_code=case_code)
-        except Case.DoesNotExist:
+            dictionary = Dictionary.objects.get(word_code=y_axis_word_code, data_type='数值类型')
+        except (Case.DoesNotExist, Dictionary.DoesNotExist):
             return Response({
                 'code': 404,
-                'msg': '未找到相关病例',
+                'msg': '未找到相关病例或词条',
                 'data': None
             }, status=404)
 
-        # 查询所有有数据的check_time
-        check_times = DataTable.objects.filter(case=case).values_list('check_time', flat=True).distinct().order_by('check_time')
+        # 查询该病例该词条下所有有数据的check_time
+        check_times = DataTable.objects.filter(case=case, dictionary=dictionary).values_list('check_time', flat=True).distinct().order_by('check_time')
         x_axis_options = [ct.strftime('%Y-%m-%d %H:%M:%S') for ct in check_times if ct]
 
         return Response({
