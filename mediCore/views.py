@@ -1108,12 +1108,12 @@ class CaseVisualizationDataView(APIView):
 
 class CaseVisualizationYAxisTimesView(APIView):
     """
-    根据病例编号查询Y轴选项（所有数值型词条）。
+    根据病例编号查询Y轴选项（所有数值型词条），按模板分组返回
     """
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="根据病例编号查询Y轴选项（所有数值型词条）",
+        operation_description="根据病例编号查询Y轴选项（所有数值型词条），按模板分组返回",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['case_code'],
@@ -1126,14 +1126,28 @@ class CaseVisualizationYAxisTimesView(APIView):
         ),
         responses={
             200: openapi.Response(
-                description="成功返回Y轴选项（所有数值型词条）",
+                description="成功返回Y轴选项（按模板分组的数值型词条）",
                 examples={
                     "application/json": {
                         "code": 200,
                         "msg": "操作成功",
                         "data": [
-                            {"word_code": "A000001", "word_name": "白细胞"},
-                            {"word_code": "A000002", "word_name": "红细胞"}
+                            {
+                                "template_name": "血常规",
+                                "template_code": "T000001",
+                                "dictionaries": [
+                                    {"word_code": "A000001", "word_name": "白细胞"},
+                                    {"word_code": "A000002", "word_name": "红细胞"}
+                                ]
+                            },
+                            {
+                                "template_name": "凝血四项",
+                                "template_code": "T000002",
+                                "dictionaries": [
+                                    {"word_code": "B000001", "word_name": "血压"},
+                                    {"word_code": "B000002", "word_name": "心率"}
+                                ]
+                            }
                         ]
                     }
                 }
@@ -1151,7 +1165,7 @@ class CaseVisualizationYAxisTimesView(APIView):
                 'data': None
             }, status=400)
 
-        from .models import Case, Dictionary
+        from .models import Case, Dictionary, DataTable
         from .serializers import CaseVisualizationOptionSerializer
         try:
             case = Case.objects.get(case_code=case_code)
@@ -1162,16 +1176,43 @@ class CaseVisualizationYAxisTimesView(APIView):
                 'data': None
             }, status=404)
 
-        y_axis_dictionaries = Dictionary.objects.filter(
-            datatable__case=case,
-            data_type='数值类型'
+        # 查询该病例下所有数值型词条，按模板分组
+        data_tables = DataTable.objects.filter(
+            case=case,
+            dictionary__data_type='数值类型'
+        ).select_related(
+            'data_template',
+            'dictionary'
         ).distinct()
-        y_axis_options = CaseVisualizationOptionSerializer(y_axis_dictionaries, many=True).data
+
+        # 按模板分组
+        template_groups = {}
+        seen_dictionaries = set()  # 用于去重
+        for dt in data_tables:
+            if dt.data_template:
+                template_key = f"{dt.data_template.template_code}_{dt.data_template.template_name}"
+                if template_key not in template_groups:
+                    template_groups[template_key] = {
+                        'template_name': dt.data_template.template_name,
+                        'template_code': dt.data_template.template_code,
+                        'dictionaries': []
+                    }
+                
+                # 检查是否已添加该词条（去重）
+                if dt.dictionary.word_code not in seen_dictionaries:
+                    seen_dictionaries.add(dt.dictionary.word_code)
+                    template_groups[template_key]['dictionaries'].append({
+                        'word_code': dt.dictionary.word_code,
+                        'word_name': dt.dictionary.word_name
+                    })
+
+        # 转换为前端需要的格式
+        result_data = list(template_groups.values())
 
         return Response({
             'code': 200,
             'msg': '操作成功',
-            'data': y_axis_options
+            'data': result_data
         })
 
 class CaseVisualizationXAxisOptionsView(APIView):
