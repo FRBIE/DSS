@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.views import RegisterView, LoginView
 from .views import (
     DictionaryViewSet, DataTemplateViewSet, ArchiveViewSet, CaseViewSet,
-    IdentityViewSet, DataTableViewSet, DataTemplateCategoryViewSet
+    IdentityViewSet, DataTableViewSet, DataTemplateCategoryViewSet, DataTableCRUDView
 )
 from mediCore.views import PatientMergedCaseListView, CaseTemplateSummaryView, CaseTemplateDetailView, CaseVisualizationDataView, CaseVisualizationYAxisTimesView, CaseVisualizationXAxisOptionsView
 
@@ -61,4 +61,5 @@ urlpatterns = [
     path('api/case-visualization-data/', CaseVisualizationDataView.as_view(), name='case-visualization-data'),
     path('api/case-visualization-yaxis-options/', CaseVisualizationYAxisTimesView.as_view(), name='case-visualization-yaxis-options'),
     path('api/case-visualization-xaxis-options/', CaseVisualizationXAxisOptionsView.as_view(), name='case-visualization-xaxis-options'),
+    path('api/data-table-crud/', DataTableCRUDView.as_view(), name='data-table-crud'),
 ]

@@ -1287,3 +1287,404 @@ class CaseVisualizationXAxisOptionsView(APIView):
                 'x_axis_options': x_axis_options
             }
         })
+
+class DataTableCRUDView(APIView):
+    """
+    数据表的增删改查接口，根据病例编号、模板编号、词条编号、检查时间共同确定一条数据。
+    """
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="根据病例编号、模板编号、词条编号、检查时间查询数据",
+        manual_parameters=[
+            openapi.Parameter('case_code', openapi.IN_QUERY, description="病例编号", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('template_code', openapi.IN_QUERY, description="模板编号", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('word_code', openapi.IN_QUERY, description="词条编号", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('check_time', openapi.IN_QUERY, description="检查时间，格式YYYY-MM-DD HH:MM:SS", type=openapi.TYPE_STRING, required=True),
+        ],
+        responses={
+            200: openapi.Response(
+                description="成功返回数据",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "操作成功",
+                        "data": {
+                            "id": 123,
+                            "case_code": "C000001",
+                            "template_code": "T000001",
+                            "word_code": "A000001",
+                            "word_name": "白细胞",
+                            "value": "5.6",
+                            "check_time": "2025-06-18 04:36:00"
+                        }
+                    }
+                }
+            ),
+            400: '参数错误',
+            404: '未找到相关数据'
+        }
+    )
+    def get(self, request):
+        """查询数据"""
+        case_code = request.query_params.get('case_code')
+        template_code = request.query_params.get('template_code')
+        word_code = request.query_params.get('word_code')
+        check_time = request.query_params.get('check_time')
+        
+        if not all([case_code, template_code, word_code, check_time]):
+            return Response({
+                'code': 400,
+                'msg': '请提供case_code、template_code、word_code和check_time',
+                'data': None
+            }, status=400)
+
+        from .models import Case, DataTemplate, Dictionary, DataTable
+        from django.utils.dateparse import parse_datetime
+        
+        try:
+            case = Case.objects.get(case_code=case_code)
+            template = DataTemplate.objects.get(template_code=template_code)
+            dictionary = Dictionary.objects.get(word_code=word_code)
+            dt_check_time = parse_datetime(check_time)
+            if not dt_check_time:
+                raise ValueError("时间格式错误")
+        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist, ValueError) as e:
+            return Response({
+                'code': 404,
+                'msg': f'未找到相关数据: {str(e)}',
+                'data': None
+            }, status=404)
+
+        try:
+            data_table = DataTable.objects.get(
+                case=case,
+                data_template=template,
+                dictionary=dictionary,
+                check_time=dt_check_time
+            )
+        except DataTable.DoesNotExist:
+            return Response({
+                'code': 404,
+                'msg': '未找到相关数据',
+                'data': None
+            }, status=404)
+
+        return Response({
+            'code': 200,
+            'msg': '查询成功',
+            'data': {
+                'id': data_table.id,
+                'case_code': case_code,
+                'template_code': template_code,
+                'word_code': word_code,
+                'word_name': dictionary.word_name,
+                'value': data_table.value,
+                'check_time': check_time
+            }
+        })
+
+    @swagger_auto_schema(
+        operation_description="创建新数据",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['case_code', 'template_code', 'word_code', 'check_time', 'value'],
+            properties={
+                'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
+                'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号'),
+                'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号'),
+                'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间，格式YYYY-MM-DD HH:MM:SS'),
+                'value': openapi.Schema(type=openapi.TYPE_STRING, description='数据值'),
+            },
+            example={
+                'case_code': 'C000001',
+                'template_code': 'T000001',
+                'word_code': 'A000001',
+                'check_time': '2025-06-18 04:36:00',
+                'value': '5.6'
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功创建数据",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "创建成功",
+                        "data": {
+                            "id": 123,
+                            "case_code": "C000001",
+                            "template_code": "T000001",
+                            "word_code": "A000001",
+                            "word_name": "白细胞",
+                            "value": "5.6",
+                            "check_time": "2025-06-18 04:36:00"
+                        }
+                    }
+                }
+            ),
+            400: '参数错误',
+            409: '数据已存在'
+        }
+    )
+    def post(self, request):
+        """创建数据"""
+        case_code = request.data.get('case_code')
+        template_code = request.data.get('template_code')
+        word_code = request.data.get('word_code')
+        check_time = request.data.get('check_time')
+        value = request.data.get('value')
+        
+        if not all([case_code, template_code, word_code, check_time, value]):
+            return Response({
+                'code': 400,
+                'msg': '请提供case_code、template_code、word_code、check_time和value',
+                'data': None
+            }, status=400)
+
+        from .models import Case, DataTemplate, Dictionary, DataTable
+        from django.utils.dateparse import parse_datetime
+        
+        try:
+            case = Case.objects.get(case_code=case_code)
+            template = DataTemplate.objects.get(template_code=template_code)
+            dictionary = Dictionary.objects.get(word_code=word_code)
+            dt_check_time = parse_datetime(check_time)
+            if not dt_check_time:
+                raise ValueError("时间格式错误")
+        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist, ValueError) as e:
+            return Response({
+                'code': 404,
+                'msg': f'未找到相关数据: {str(e)}',
+                'data': None
+            }, status=404)
+
+        # 检查是否已存在
+        if DataTable.objects.filter(
+            case=case,
+            data_template=template,
+            dictionary=dictionary,
+            check_time=dt_check_time
+        ).exists():
+            return Response({
+                'code': 409,
+                'msg': '数据已存在',
+                'data': None
+            }, status=409)
+
+        # 创建新数据
+        data_table = DataTable.objects.create(
+            case=case,
+            data_template=template,
+            dictionary=dictionary,
+            check_time=dt_check_time,
+            value=value
+        )
+
+        return Response({
+            'code': 200,
+            'msg': '创建成功',
+            'data': {
+                'id': data_table.id,
+                'case_code': case_code,
+                'template_code': template_code,
+                'word_code': word_code,
+                'word_name': dictionary.word_name,
+                'value': value,
+                'check_time': check_time
+            }
+        })
+
+    @swagger_auto_schema(
+        operation_description="更新数据",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['case_code', 'template_code', 'word_code', 'check_time', 'value'],
+            properties={
+                'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
+                'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号'),
+                'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号'),
+                'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间，格式YYYY-MM-DD HH:MM:SS'),
+                'value': openapi.Schema(type=openapi.TYPE_STRING, description='新的数据值'),
+            },
+            example={
+                'case_code': 'C000001',
+                'template_code': 'T000001',
+                'word_code': 'A000001',
+                'check_time': '2025-06-18 04:36:00',
+                'value': '6.1'
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功更新数据",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "更新成功",
+                        "data": {
+                            "id": 123,
+                            "case_code": "C000001",
+                            "template_code": "T000001",
+                            "word_code": "A000001",
+                            "word_name": "白细胞",
+                            "value": "6.1",
+                            "check_time": "2025-06-18 04:36:00"
+                        }
+                    }
+                }
+            ),
+            400: '参数错误',
+            404: '未找到相关数据'
+        }
+    )
+    def put(self, request):
+        """更新数据"""
+        case_code = request.data.get('case_code')
+        template_code = request.data.get('template_code')
+        word_code = request.data.get('word_code')
+        check_time = request.data.get('check_time')
+        value = request.data.get('value')
+        
+        if not all([case_code, template_code, word_code, check_time, value]):
+            return Response({
+                'code': 400,
+                'msg': '请提供case_code、template_code、word_code、check_time和value',
+                'data': None
+            }, status=400)
+
+        from .models import Case, DataTemplate, Dictionary, DataTable
+        from django.utils.dateparse import parse_datetime
+        
+        try:
+            case = Case.objects.get(case_code=case_code)
+            template = DataTemplate.objects.get(template_code=template_code)
+            dictionary = Dictionary.objects.get(word_code=word_code)
+            dt_check_time = parse_datetime(check_time)
+            if not dt_check_time:
+                raise ValueError("时间格式错误")
+        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist, ValueError) as e:
+            return Response({
+                'code': 404,
+                'msg': f'未找到相关数据: {str(e)}',
+                'data': None
+            }, status=404)
+
+        try:
+            data_table = DataTable.objects.get(
+                case=case,
+                data_template=template,
+                dictionary=dictionary,
+                check_time=dt_check_time
+            )
+        except DataTable.DoesNotExist:
+            return Response({
+                'code': 404,
+                'msg': '未找到相关数据',
+                'data': None
+            }, status=404)
+
+        # 更新数据
+        data_table.value = value
+        data_table.save()
+
+        return Response({
+            'code': 200,
+            'msg': '更新成功',
+            'data': {
+                'id': data_table.id,
+                'case_code': case_code,
+                'template_code': template_code,
+                'word_code': word_code,
+                'word_name': dictionary.word_name,
+                'value': value,
+                'check_time': check_time
+            }
+        })
+
+    @swagger_auto_schema(
+        operation_description="删除数据",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['case_code', 'template_code', 'word_code', 'check_time'],
+            properties={
+                'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
+                'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号'),
+                'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号'),
+                'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间，格式YYYY-MM-DD HH:MM:SS'),
+            },
+            example={
+                'case_code': 'C000001',
+                'template_code': 'T000001',
+                'word_code': 'A000001',
+                'check_time': '2025-06-18 04:36:00'
+            }
+        ),
+        responses={
+            200: openapi.Response(
+                description="成功删除数据",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "删除成功",
+                        "data": None
+                    }
+                }
+            ),
+            400: '参数错误',
+            404: '未找到相关数据'
+        }
+    )
+    def delete(self, request):
+        """删除数据"""
+        case_code = request.data.get('case_code')
+        template_code = request.data.get('template_code')
+        word_code = request.data.get('word_code')
+        check_time = request.data.get('check_time')
+        
+        if not all([case_code, template_code, word_code, check_time]):
+            return Response({
+                'code': 400,
+                'msg': '请提供case_code、template_code、word_code和check_time',
+                'data': None
+            }, status=400)
+
+        from .models import Case, DataTemplate, Dictionary, DataTable
+        from django.utils.dateparse import parse_datetime
+        
+        try:
+            case = Case.objects.get(case_code=case_code)
+            template = DataTemplate.objects.get(template_code=template_code)
+            dictionary = Dictionary.objects.get(word_code=word_code)
+            dt_check_time = parse_datetime(check_time)
+            if not dt_check_time:
+                raise ValueError("时间格式错误")
+        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist, ValueError) as e:
+            return Response({
+                'code': 404,
+                'msg': f'未找到相关数据: {str(e)}',
+                'data': None
+            }, status=404)
+
+        try:
+            data_table = DataTable.objects.get(
+                case=case,
+                data_template=template,
+                dictionary=dictionary,
+                check_time=dt_check_time
+            )
+        except DataTable.DoesNotExist:
+            return Response({
+                'code': 404,
+                'msg': '未找到相关数据',
+                'data': None
+            }, status=404)
+
+        # 删除数据
+        data_table.delete()
+
+        return Response({
+            'code': 200,
+            'msg': '删除成功',
+            'data': None
+        })
