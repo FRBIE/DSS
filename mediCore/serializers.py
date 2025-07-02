@@ -9,6 +9,8 @@ import re
 import logging
 import csv
 import codecs
+import time
+import json
 logger = logging.getLogger(__name__)
 
 
@@ -30,17 +32,7 @@ class DictionarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Dictionary
-        fields = [
-            'id',
-            'word_code',
-            'word_name',
-            'word_eng',
-            'word_short',
-            'word_class',
-            'word_apply',
-            'word_belong',
-            'data_type'
-        ]
+        fields = '__all__'  # 确保input_type、options、followup_options被序列化
         read_only_fields = ['id']
 
     def validate_word_class(self, value):
@@ -60,27 +52,31 @@ class DictionarySerializer(serializers.ModelSerializer):
         if not prefix:
             raise serializers.ValidationError({"word_class": "无法根据词条类型生成编号前缀."})
 
-        last_entry = Dictionary.objects.filter(word_code__startswith=prefix).order_by('-word_code').first()
+        # 取所有以 prefix 开头且后面跟6位数字的 word_code
+        all_codes = Dictionary.objects.filter(word_code__startswith=prefix).values_list('word_code', flat=True)
+        max_num = 0
+        for code in all_codes:
+            m = re.match(rf'^{prefix}(\d{{6}})$', code)
+            if m:
+                num = int(m.group(1))
+                if num > max_num:
+                    max_num = num
 
-        next_numeric_part = 1
-        if last_entry and last_entry.word_code:
-            numeric_str_match = re.search(r'\d+$', last_entry.word_code)
-            if numeric_str_match:
-                try:
-                    next_numeric_part = int(numeric_str_match.group(0)) + 1
-                except ValueError:
-                    pass
-
-        NUM_DIGITS = 6
-        generated_word_code = f"{prefix}{next_numeric_part:0{NUM_DIGITS}d}"
-        validated_data['word_code'] = generated_word_code
-        try:
-            instance = super().create(validated_data)
-        except IntegrityError:
-            raise serializers.ValidationError({
-                "word_code": "无法生成唯一的词条编号，请重试。"
-            })
-        return instance
+        # 尝试生成唯一编号，最多尝试10次
+        for _ in range(10):
+            next_numeric_part = max_num + 1
+            generated_word_code = f"{prefix}{next_numeric_part:06d}"
+            validated_data['word_code'] = generated_word_code
+            try:
+                instance = super().create(validated_data)
+                return instance
+            except IntegrityError:
+                # 可能并发冲突，重试
+                max_num += 1
+                time.sleep(0.01)
+        raise serializers.ValidationError({
+            "word_code": "无法生成唯一的词条编号，请联系管理员检查数据库。"
+        })
 
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
@@ -576,6 +572,16 @@ class DataTableSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'word_code': '词条编号不存在'})
 
         return data
+
+    def validate_value(self, value):
+        # 如果是字符串且内容是JSON，自动解析
+        if isinstance(value, str):
+            try:
+                json.loads(value)
+                return value
+            except Exception:
+                return value
+        return value
 
     def create(self, validated_data):
         # 获取病例信息

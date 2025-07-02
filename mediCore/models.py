@@ -16,6 +16,20 @@ class Dictionary(models.Model):
     word_apply = models.CharField(max_length=255, help_text='词条应用')
     word_belong = models.CharField(max_length=255, null=True, blank=True, help_text='从属别名')
     data_type = models.CharField(max_length=128, null=True, blank=True, help_text='数据类型，如数值类型、文本类型')
+    input_type = models.CharField(
+        max_length=32,
+        choices=[
+            ('single', '单选'),
+            ('multi', '多选'),
+            ('text', '填空'),
+            ('multi_with_followup', '多选+后续单选'),
+            ('multi_with_time', '多选+后续时间'),
+        ],
+        default='text',
+        verbose_name='填写方式'
+    )
+    options = models.TextField(blank=True, null=True, verbose_name='主选项')
+    followup_options = models.JSONField(blank=True, null=True, verbose_name='后续选项')
 
     class Meta:
         db_table = 'dictionary'

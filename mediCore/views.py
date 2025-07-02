@@ -47,6 +47,40 @@ class DictionaryViewSet(CustomModelViewSet):
     lookup_field = 'word_code'
     pagination_class = StandardPagination
 
+    @swagger_auto_schema(
+        operation_description="创建词条",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['word_name', 'word_class', 'word_apply', 'input_type', 'options'],
+            properties={
+                'word_name': openapi.Schema(type=openapi.TYPE_STRING, description='中文名称'),
+                'word_eng': openapi.Schema(type=openapi.TYPE_STRING, description='英文名称'),
+                'word_short': openapi.Schema(type=openapi.TYPE_STRING, description='英文缩写'),
+                'word_class': openapi.Schema(type=openapi.TYPE_STRING, description='词条类型'),
+                'word_apply': openapi.Schema(type=openapi.TYPE_STRING, description='词条应用'),
+                'word_belong': openapi.Schema(type=openapi.TYPE_STRING, description='从属别名'),
+                'data_type': openapi.Schema(type=openapi.TYPE_STRING, description='数据类型'),
+                'input_type': openapi.Schema(type=openapi.TYPE_STRING, description='填写方式'),
+                'options': openapi.Schema(type=openapi.TYPE_STRING, description='主选项'),
+                'followup_options': openapi.Schema(type=openapi.TYPE_OBJECT, description='后续选项'),
+            },
+            example={
+                "word_name": "抗病毒",
+                "word_eng": "",
+                "word_short": "",
+                "word_class": "临床信息",
+                "word_apply": "临床",
+                "word_belong": "",
+                "data_type": "",
+                "input_type": "single",
+                "options": "恩替卡韦,替诺福韦,无,其他",
+                "followup_options": {}
+            }
+        )
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
 class DataTemplateViewSet(CustomModelViewSet):
     """
     API endpoint for 临床模板管理.

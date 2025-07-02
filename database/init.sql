@@ -17,6 +17,9 @@ CREATE TABLE `dictionary`  (
   `word_apply` varchar(255) NOT NULL COMMENT '词条应用',
   `word_belong` varchar(255) NULL COMMENT '从属别名',
   `data_type` varchar(128) null comment '数据类型，如数值类型、文本类型',
+  `input_type` varchar(32) NULL COMMENT '填写方式，如single、multi、text、multi_with_followup、multi_with_time',
+  `options` text NULL COMMENT '主选项，逗号分隔',
+  `followup_options` json NULL COMMENT '后续选项，JSON结构',
   PRIMARY KEY (`id`),
   UNIQUE INDEX `uk_word_code` (`word_code`), -- 确保 word_code 的唯一性
   INDEX `name_index`(`word_name`)
@@ -58,7 +61,7 @@ CREATE TABLE `data_table`  (
   `value` varchar(1024) NOT NULL COMMENT '值',
   `check_time` datetime not null comment '检查时间',
   PRIMARY KEY (`id`),
-   UNIQUE INDEX `uk_data` (`case_id`, `data_template_id`,`dictionary_id`) -- 确保唯一性
+   UNIQUE INDEX `uk_data` (`case_id`, `data_template_id`,`dictionary_id`,`check_time`) -- 确保唯一性 一个病例同一模板可以录入多次(不同时间检测多次)
 )COMMENT='数据表';
 
 
