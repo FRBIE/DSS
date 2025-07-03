@@ -29,7 +29,7 @@ WORD_CLASS_TO_PREFIX_MAP = {
 }
 class DictionarySerializer(serializers.ModelSerializer):
     word_code = serializers.CharField(read_only=True, help_text='词条编号 (自动生成)')
-
+    input_type = serializers.ChoiceField(choices=Dictionary._meta.get_field('input_type').choices)
     class Meta:
         model = Dictionary
         fields = '__all__'  # 确保input_type、options、followup_options被序列化
