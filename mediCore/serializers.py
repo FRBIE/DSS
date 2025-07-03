@@ -549,7 +549,7 @@ class DataTableSerializer(serializers.ModelSerializer):
     template_code = serializers.CharField(write_only=True, help_text='模板编号')
     word_code = serializers.CharField(write_only=True, help_text='词条编号')
     check_time = serializers.DateTimeField(help_text='检查时间')
-    value = serializers.CharField(help_text='检查值')
+    value = serializers.JSONField(help_text='检查值')
 
     class Meta:
         model = DataTable

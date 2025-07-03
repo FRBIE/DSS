@@ -22,8 +22,12 @@ class Dictionary(models.Model):
             ('single', '单选'),
             ('multi', '多选'),
             ('text', '填空'),
-            ('multi_with_followup', '多选+后续单选'),
-            ('multi_with_time', '多选+后续时间'),
+            ('date', '日期'),
+            ('single_with_other', '单选+其他项'),
+            ('single_with_date', '单选+日期'),
+            ('multi_with_date', '多选+日期'),
+            ('multi_with_text', '多选+填空'),
+            ('hierarchical_select', '多级选择'),
         ],
         default='text',
         verbose_name='填写方式'
@@ -195,12 +199,12 @@ class DataTable(models.Model):
         db_column='dictionary_id',
         help_text='词条id'
     )
-    value = models.CharField(max_length=1024, help_text='值') # Consider TextField if values can be very long
+    value = models.JSONField(help_text='值') # Consider TextField if values can be very long
     check_time = models.DateTimeField(help_text='检查时间') # Changed to DateTimeField
 
     class Meta:
         db_table = 'data_table'
-        unique_together = (('case', 'data_template', 'dictionary'),)
+        unique_together = (('case', 'data_template', 'dictionary', 'check_time'),)
         verbose_name = '数据'
         verbose_name_plural = '数据表'
 
