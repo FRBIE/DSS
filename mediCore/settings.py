@@ -85,35 +85,35 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# # 生产环境
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'medical_data',
-#         'USER': 'mediCore',
-#         'PASSWORD': 'bWVkaUNvcmU=',
-#         'HOST': 'db',  # Docker 服务名
-#         'PORT': '3306',  # Docker MySQL 端口
-#     }
-# }
-# #生产环境
-# ALLOWED_HOSTS = [
-#     '118.89.187.153'
-#     ]
-
-# #本地开发环境
+# 生产环境
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'medical_data',
-        'USER': 'root',
-        'PASSWORD': 'cm9vdHBhc3N3b3Jk',
-        'HOST': 'localhost',  # 通常是 'localhost' 或 '127.0.0.1'
-        'PORT': '23336',  # 默认 MySQL 端口
+        'USER': 'mediCore',
+        'PASSWORD': 'bWVkaUNvcmU=',
+        'HOST': 'db',  # Docker 服务名
+        'PORT': '3306',  # Docker MySQL 端口
     }
 }
-#本地开发环境
-ALLOWED_HOSTS = []
+#生产环境
+ALLOWED_HOSTS = [
+    '118.89.187.153'
+    ]
+
+# # #本地开发环境
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'medical_data',
+#         'USER': 'root',
+#         'PASSWORD': 'cm9vdHBhc3N3b3Jk',
+#         'HOST': 'localhost',  # 通常是 'localhost' 或 '127.0.0.1'
+#         'PORT': '23336',  # 默认 MySQL 端口
+#     }
+# }
+# #本地开发环境
+# ALLOWED_HOSTS = []
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
