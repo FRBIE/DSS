@@ -996,12 +996,11 @@ class CaseTemplateDetailView(APIView):
                 'data': None
             }, status=404)
         items = []
+        from .serializers import DictionarySerializer
         for dt in data_tables:
-            items.append({
-                'word_code': dt.dictionary.word_code,
-                'word_name': dt.dictionary.word_name,
-                'value': dt.value
-            })
+            dict_data = DictionarySerializer(dt.dictionary).data
+            dict_data['value'] = dt.value
+            items.append(dict_data)
         return Response({
             'code': 200,
             'msg': '操作成功',
