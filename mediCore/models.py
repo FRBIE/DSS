@@ -29,6 +29,8 @@ class Dictionary(models.Model):
             ('multi_with_text', '多选+填空'),
             ('hierarchical_select', '多级选择'),
         ],
+        null=True,
+        blank=True,
         default='text',
         verbose_name='填写方式'
     )

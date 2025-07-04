@@ -46,9 +46,9 @@ class DictionarySerializer(serializers.ModelSerializer):
         return value
 
     def to_internal_value(self, data):
-        # 允许 input_type 为 null 或缺失，自动转为 ''
-        if 'input_type' not in data or data.get('input_type') is None:
-            data['input_type'] = ''
+        # 允许 input_type 为 null、缺省或空字符串，自动转为 None
+        if 'input_type' in data and data.get('input_type') == "":
+            data['input_type'] = None
         return super().to_internal_value(data)
 
     def create(self, validated_data):
