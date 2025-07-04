@@ -29,7 +29,7 @@ WORD_CLASS_TO_PREFIX_MAP = {
 }
 class DictionarySerializer(serializers.ModelSerializer):
     word_code = serializers.CharField(read_only=True, help_text='词条编号 (自动生成)')
-    input_type = serializers.ChoiceField(choices=Dictionary._meta.get_field('input_type').choices)
+    input_type = serializers.ChoiceField(choices=Dictionary._meta.get_field('input_type').choices, required=False, allow_null=True)
     class Meta:
         model = Dictionary
         fields = '__all__'  # 确保input_type、options、followup_options被序列化
@@ -44,6 +44,12 @@ class DictionarySerializer(serializers.ModelSerializer):
                 f"未知的词条类型: '{value}'. 可用类型: {', '.join(WORD_CLASS_TO_PREFIX_MAP.keys())}"
             )
         return value
+
+    def to_internal_value(self, data):
+        # 允许 input_type 为 null 或缺失，自动转为 ''
+        if 'input_type' not in data or data.get('input_type') is None:
+            data['input_type'] = ''
+        return super().to_internal_value(data)
 
     def create(self, validated_data):
         word_class = validated_data.get('word_class')
