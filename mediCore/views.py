@@ -87,6 +87,10 @@ class DictionaryViewSet(CustomModelViewSet):
                 'input_type': openapi.Schema(type=openapi.TYPE_STRING, description='填写方式'),
                 'options': openapi.Schema(type=openapi.TYPE_STRING, description='主选项'),
                 'followup_options': openapi.Schema(type=openapi.TYPE_OBJECT, description='后续选项'),
+                'has_unit': openapi.Schema(type=openapi.TYPE_INTEGER, description='是否有单位 0-无 1-有'),
+                'unit': openapi.Schema(type=openapi.TYPE_STRING, description='词条单位'),
+                'is_score': openapi.Schema(type=openapi.TYPE_INTEGER, description='是否为评分词条 0-不是 1-是'),
+                'score_func': openapi.Schema(type=openapi.TYPE_STRING, description='评分计算方式'),
             },
             example={
                 "word_name": "抗病毒",
@@ -98,7 +102,11 @@ class DictionaryViewSet(CustomModelViewSet):
                 "data_type": "",
                 "input_type": "single",
                 "options": "恩替卡韦,替诺福韦,无,其他",
-                "followup_options": {}
+                "followup_options": {},
+                "has_unit": 0,
+                "unit": "",
+                "is_score": 1,
+                "score_func": "我是具体的评分计算方式，存储为字符串"
             }
         )
     )
