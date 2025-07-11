@@ -31,21 +31,45 @@ class DictionaryViewSet(CustomModelViewSet):
     """
     API endpoint for 系统词条 (System Dictionary).
 
+    - 支持通过 word_code 或 id 查询、修改、删除单个词条：
+      例如 /api/dictionary/1/ 或 /api/dictionary/ABC123/ 都可以。
+      优先按 word_code 查找，查不到且参数为纯数字时自动按 id 查找。
+
     - **Create**: POST /api/dictionary/
       - `word_code` is auto-generated.
       - Required fields: `word_name`, `word_class`, `word_apply`.
       - Optional fields: `word_eng`, `word_short`, `word_belong`, `data_type`.
     - **List**: GET /api/dictionary/
       - 支持分页: ?page=1&page_size=10
-    - **Retrieve**: GET /api/dictionary/{word_code}/
-    - **Update**: PUT /api/dictionary/{word_code}/ (all fields except word_code)
-    - **Partial Update**: PATCH /api/dictionary/{word_code}/ (specified fields except word_code)
-    - **Delete**: DELETE /api/dictionary/{word_code}/
+    - **Retrieve**: GET /api/dictionary/{word_code or id}/
+    - **Update**: PUT /api/dictionary/{word_code or id}/ (all fields except word_code)
+    - **Partial Update**: PATCH /api/dictionary/{word_code or id}/ (specified fields except word_code)
+    - **Delete**: DELETE /api/dictionary/{word_code or id}/
     """
     queryset = Dictionary.objects.all().order_by('word_code')
     serializer_class = DictionarySerializer
     lookup_field = 'word_code'
     pagination_class = StandardPagination
+
+    def get_object(self):
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup_value = self.kwargs.get(lookup_url_kwarg)
+        queryset = self.get_queryset()
+        # 优先按 word_code 查找
+        try:
+            return queryset.get(word_code=lookup_value)
+        except Dictionary.DoesNotExist:
+            # 如果是纯数字，尝试按 id 查找
+            if str(lookup_value).isdigit():
+                try:
+                    return queryset.get(id=int(lookup_value))
+                except Dictionary.DoesNotExist:
+                    pass
+        self.does_not_exist()
+
+    def does_not_exist(self):
+        from rest_framework.exceptions import NotFound
+        raise NotFound('未找到对应的词条（word_code 或 id）')
 
     @swagger_auto_schema(
         operation_description="创建词条",
@@ -80,6 +104,39 @@ class DictionaryViewSet(CustomModelViewSet):
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="查询单个词条（支持 word_code 或 id 作为路径参数）",
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="更新单个词条（支持 word_code 或 id 作为路径参数）",
+    )
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="部分更新单个词条（支持 word_code 或 id 作为路径参数）",
+        manual_parameters=[
+            openapi.Parameter(
+                'word_code',
+                openapi.IN_PATH,
+                description="词条编号或id（均可作为路径参数）",
+                type=openapi.TYPE_STRING,
+                required=True
+            )
+        ]
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="删除单个词条（支持 word_code 或 id 作为路径参数）",
+    )
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
 
 class DataTemplateViewSet(CustomModelViewSet):
     """
@@ -1328,12 +1385,12 @@ class DataTableCRUDView(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="根据病例编号、模板编号、词条编号、检查时间查询数据",
+        operation_description="根据病例编号、模板编号、词条编号、检查时间查询数据。\n\n如果不传check_time，则返回所有相关数据（即所有匹配病例编号、模板编号、词条编号的数据，check_time不是必填项），返回格式为 {\"list\": [...]}",
         manual_parameters=[
             openapi.Parameter('case_code', openapi.IN_QUERY, description="病例编号", type=openapi.TYPE_STRING, required=True),
             openapi.Parameter('template_code', openapi.IN_QUERY, description="模板编号", type=openapi.TYPE_STRING, required=True),
             openapi.Parameter('word_code', openapi.IN_QUERY, description="词条编号", type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('check_time', openapi.IN_QUERY, description="检查时间，格式YYYY-MM-DD HH:MM:SS", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('check_time', openapi.IN_QUERY, description="检查时间，格式YYYY-MM-DD HH:MM:SS（可选，不传则返回所有相关数据，返回格式为 {list: [...]})", type=openapi.TYPE_STRING, required=False),
         ],
         responses={
             200: openapi.Response(
@@ -1341,15 +1398,37 @@ class DataTableCRUDView(APIView):
                 examples={
                     "application/json": {
                         "code": 200,
-                        "msg": "操作成功",
+                        "msg": "查询成功",
                         "data": {
-                            "id": 123,
-                            "case_code": "C000001",
-                            "template_code": "T000001",
-                            "word_code": "A000001",
-                            "word_name": "白细胞",
-                            "value": "5.6",
-                            "check_time": "2025-06-18 04:36:00"
+                            "list": [
+                                {
+                                    "id": 3000,
+                                    "case_code": "C000039",
+                                    "template_code": "T000001",
+                                    "word_code": "TES000022",
+                                    "word_name": "总胆红素",
+                                    "value": "178",
+                                    "check_time": "2025-05-25 15:30:00"
+                                },
+                                {
+                                    "id": 3001,
+                                    "case_code": "C000039",
+                                    "template_code": "T000001",
+                                    "word_code": "TES000022",
+                                    "word_name": "总胆红素",
+                                    "value": "85",
+                                    "check_time": "2025-05-27 15:30:00"
+                                },
+                                {
+                                    "id": 3002,
+                                    "case_code": "C000039",
+                                    "template_code": "T000001",
+                                    "word_code": "TES000022",
+                                    "word_name": "总胆红素",
+                                    "value": "120",
+                                    "check_time": "2025-05-26 09:15:00"
+                                }
+                            ]
                         }
                     }
                 }
@@ -1365,56 +1444,64 @@ class DataTableCRUDView(APIView):
         word_code = request.query_params.get('word_code')
         check_time = request.query_params.get('check_time')
         
-        if not all([case_code, template_code, word_code, check_time]):
+        if not all([case_code, template_code, word_code]):
             return Response({
                 'code': 400,
-                'msg': '请提供case_code、template_code、word_code和check_time',
+                'msg': '请提供case_code、template_code和word_code',
                 'data': None
             }, status=400)
 
         from .models import Case, DataTemplate, Dictionary, DataTable
         from django.utils.dateparse import parse_datetime
-        
         try:
             case = Case.objects.get(case_code=case_code)
             template = DataTemplate.objects.get(template_code=template_code)
             dictionary = Dictionary.objects.get(word_code=word_code)
-            dt_check_time = parse_datetime(check_time)
-            if not dt_check_time:
-                raise ValueError("时间格式错误")
-        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist, ValueError) as e:
+        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist) as e:
             return Response({
                 'code': 404,
                 'msg': f'未找到相关数据: {str(e)}',
                 'data': None
             }, status=404)
 
-        try:
-            data_table = DataTable.objects.get(
-                case=case,
-                data_template=template,
-                dictionary=dictionary,
-                check_time=dt_check_time
-            )
-        except DataTable.DoesNotExist:
+        queryset = DataTable.objects.filter(
+            case=case,
+            data_template=template,
+            dictionary=dictionary
+        )
+        if check_time:
+            dt_check_time = parse_datetime(check_time)
+            if not dt_check_time:
+                return Response({
+                    'code': 400,
+                    'msg': 'check_time格式错误，需为YYYY-MM-DD HH:MM:SS',
+                    'data': None
+                }, status=400)
+            queryset = queryset.filter(check_time=dt_check_time)
+
+        if not queryset.exists():
             return Response({
                 'code': 404,
                 'msg': '未找到相关数据',
                 'data': None
             }, status=404)
 
-        return Response({
-            'code': 200,
-            'msg': '查询成功',
-            'data': {
-                'id': data_table.id,
+        data = [
+            {
+                'id': dt.id,
                 'case_code': case_code,
                 'template_code': template_code,
                 'word_code': word_code,
                 'word_name': dictionary.word_name,
-                'value': data_table.value,
-                'check_time': check_time
+                'value': dt.value,
+                'check_time': dt.check_time.strftime('%Y-%m-%d %H:%M:%S') if dt.check_time else None
             }
+            for dt in queryset
+        ]
+        return Response({
+            'code': 200,
+            'msg': '查询成功',
+            'data': {'list': data}
         })
 
     @swagger_auto_schema(

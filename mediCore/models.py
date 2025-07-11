@@ -36,6 +36,10 @@ class Dictionary(models.Model):
     )
     options = models.TextField(blank=True, null=True, verbose_name='主选项')
     followup_options = models.JSONField(blank=True, null=True, verbose_name='后续选项')
+    has_unit = models.BooleanField(default=False, help_text='是否有单位 0-无 1-有')
+    unit = models.CharField(max_length=32, null=True, blank=True, help_text='词条单位')
+    is_score = models.BooleanField(default=False, help_text='是否为评分词条 0-不是 1-是')
+    score_func = models.TextField(null=True, blank=True, help_text='评分计算方式')
 
     class Meta:
         db_table = 'dictionary'
@@ -141,7 +145,7 @@ class Case(models.Model):
     )
     opd_id = models.CharField(max_length=255, null=True, blank=True, help_text='门诊号')
     inhospital_id = models.CharField(max_length=255, null=True, blank=True, help_text='住院号')
-    name = models.CharField(max_length=255, help_text='姓名') 
+    name = models.CharField(max_length=255, help_text='姓名')
     gender = models.PositiveSmallIntegerField(choices=GENDER_CHOICES, help_text='性别 0-女 1-男')
     birth_date = models.DateField(help_text='出生年月日')
     phone_number = models.CharField(max_length=36, null=True, blank=True, help_text='联系电话')
@@ -227,7 +231,7 @@ class Archive(models.Model):
     def __str__(self):
         return f"{self.archive_name} ({self.archive_code})"
 
-    @property    
+    @property
     def case_count(self):
         """获取档案包含的病例数"""
         return self.cases.count()

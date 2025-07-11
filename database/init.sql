@@ -20,6 +20,10 @@ CREATE TABLE `dictionary`  (
   `input_type` varchar(32) NULL COMMENT '填写方式，如single、multi、text、multi_with_followup、multi_with_time',
   `options` text NULL COMMENT '主选项，逗号分隔',
   `followup_options` json NULL COMMENT '后续选项，JSON结构',
+  `has_unit` tinyint(1) default 0 COMMENT '是否有单位 0-无 1-有',
+  `unit` varchar(32) NULL COMMENT '词条单位',
+  `is_score` tinyint(1) default 0 COMMENT '是否为评分词条 0-不是 1-是',
+  `score_func` text NULL COMMENT '评分计算方式',
   PRIMARY KEY (`id`),
   UNIQUE INDEX `uk_word_code` (`word_code`), -- 确保 word_code 的唯一性
   INDEX `name_index`(`word_name`)

@@ -30,6 +30,10 @@ WORD_CLASS_TO_PREFIX_MAP = {
 class DictionarySerializer(serializers.ModelSerializer):
     word_code = serializers.CharField(read_only=True, help_text='词条编号 (自动生成)')
     input_type = serializers.ChoiceField(choices=Dictionary._meta.get_field('input_type').choices, required=False, allow_null=True)
+    has_unit = serializers.BooleanField(required=False, help_text='是否有单位 0-无 1-有')
+    unit = serializers.CharField(required=False, allow_blank=True, allow_null=True, help_text='词条单位')
+    is_score = serializers.BooleanField(required=False, help_text='是否为评分词条 0-不是 1-是')
+    score_func = serializers.CharField(required=False, allow_blank=True, allow_null=True, help_text='评分计算方式')
     class Meta:
         model = Dictionary
         fields = '__all__'  # 确保input_type、options、followup_options被序列化
@@ -86,6 +90,13 @@ class DictionarySerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # 强制转为0/1
+        data['has_unit'] = int(instance.has_unit) if instance.has_unit is not None else 0
+        data['is_score'] = int(instance.is_score) if instance.is_score is not None else 0
+        return data
 
 
 class DataTemplateCategorySerializer(serializers.ModelSerializer):
