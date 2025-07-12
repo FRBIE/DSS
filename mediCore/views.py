@@ -72,11 +72,12 @@ class DictionaryViewSet(CustomModelViewSet):
         raise NotFound('未找到对应的词条（word_code 或 id）')
 
     @swagger_auto_schema(
-        operation_description="创建词条",
+        operation_description="创建或更新词条（如果请求中包含id且该id在数据库中存在，则进行更新操作；否则创建新词条）",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['word_name', 'word_class', 'word_apply', 'input_type', 'options'],
             properties={
+                'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='词条ID（可选，如果提供且存在则进行更新操作）'),
                 'word_name': openapi.Schema(type=openapi.TYPE_STRING, description='中文名称'),
                 'word_eng': openapi.Schema(type=openapi.TYPE_STRING, description='英文名称'),
                 'word_short': openapi.Schema(type=openapi.TYPE_STRING, description='英文缩写'),
@@ -93,6 +94,7 @@ class DictionaryViewSet(CustomModelViewSet):
                 'score_func': openapi.Schema(type=openapi.TYPE_STRING, description='评分计算方式'),
             },
             example={
+                "id": 354,
                 "word_name": "抗病毒",
                 "word_eng": "",
                 "word_short": "",
@@ -111,6 +113,30 @@ class DictionaryViewSet(CustomModelViewSet):
         )
     )
     def create(self, request, *args, **kwargs):
+        # 检查是否提供了id字段
+        dictionary_id = request.data.get('id')
+        
+        if dictionary_id:
+            # 尝试查找现有记录
+            try:
+                instance = Dictionary.objects.get(id=dictionary_id)
+                # 如果找到记录，进行更新操作
+                serializer = self.get_serializer(instance, data=request.data, partial=True)
+                if not serializer.is_valid():
+                    from utils.response import APIResponse
+                    from utils.enums import ResponseCode
+                    return APIResponse(response_code=ResponseCode.BAD_REQUEST, data=serializer.errors)
+                
+                self.perform_update(serializer)
+                from utils.response import APIResponse
+                from utils.enums import ResponseCode
+                return APIResponse(response_code=ResponseCode.SUCCESS, data=serializer.data)
+                
+            except Dictionary.DoesNotExist:
+                # 如果id不存在，继续执行创建操作
+                pass
+        
+        # 执行原有的创建逻辑
         return super().create(request, *args, **kwargs)
 
     @swagger_auto_schema(

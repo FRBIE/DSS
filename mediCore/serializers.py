@@ -37,7 +37,7 @@ class DictionarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Dictionary
         fields = '__all__'  # 确保input_type、options、followup_options被序列化
-        read_only_fields = ['id']
+        read_only_fields = ['word_code']  # 只将word_code设为只读，允许id在更新时传入
 
     def validate_word_class(self, value):
         """
@@ -89,6 +89,8 @@ class DictionarySerializer(serializers.ModelSerializer):
         })
 
     def update(self, instance, validated_data):
+        # 确保在更新时不会修改 word_code
+        validated_data.pop('word_code', None)
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):
