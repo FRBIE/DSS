@@ -56,6 +56,9 @@ class DictionarySerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def create(self, validated_data):
+        # 如果已存在 word_code，说明是更新，不生成新 word_code
+        if 'word_code' in validated_data and validated_data['word_code']:
+            return super().create(validated_data)
         word_class = validated_data.get('word_class')
         prefix = WORD_CLASS_TO_PREFIX_MAP.get(word_class)
 

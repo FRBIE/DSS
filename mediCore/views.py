@@ -113,29 +113,32 @@ class DictionaryViewSet(CustomModelViewSet):
         )
     )
     def create(self, request, *args, **kwargs):
-        # 检查是否提供了id字段
+        # 检查是否提供了id字段或word_name字段
         dictionary_id = request.data.get('id')
-        
+        word_name = request.data.get('word_name')
+        instance = None
         if dictionary_id:
-            # 尝试查找现有记录
             try:
                 instance = Dictionary.objects.get(id=dictionary_id)
-                # 如果找到记录，进行更新操作
-                serializer = self.get_serializer(instance, data=request.data, partial=True)
-                if not serializer.is_valid():
-                    from utils.response import APIResponse
-                    from utils.enums import ResponseCode
-                    return APIResponse(response_code=ResponseCode.BAD_REQUEST, data=serializer.errors)
-                
-                self.perform_update(serializer)
+            except Dictionary.DoesNotExist:
+                instance = None
+        # 如果没有通过id找到，再通过word_name查找
+        if not instance and word_name:
+            try:
+                instance = Dictionary.objects.get(word_name=word_name)
+            except Dictionary.DoesNotExist:
+                instance = None
+        if instance:
+            # 更新操作，word_code 不变
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            if not serializer.is_valid():
                 from utils.response import APIResponse
                 from utils.enums import ResponseCode
-                return APIResponse(response_code=ResponseCode.SUCCESS, data=serializer.data)
-                
-            except Dictionary.DoesNotExist:
-                # 如果id不存在，继续执行创建操作
-                pass
-        
+                return APIResponse(response_code=ResponseCode.BAD_REQUEST, data=serializer.errors)
+            self.perform_update(serializer)
+            from utils.response import APIResponse
+            from utils.enums import ResponseCode
+            return APIResponse(response_code=ResponseCode.SUCCESS, data=serializer.data)
         # 执行原有的创建逻辑
         return super().create(request, *args, **kwargs)
 
@@ -171,6 +174,73 @@ class DictionaryViewSet(CustomModelViewSet):
     )
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="根据 word_name 完全匹配查询词条信息\nGET /api/dictionary/by-word-name/?word_name=xxx",
+        manual_parameters=[
+            openapi.Parameter(
+                'word_name', openapi.IN_QUERY, description="要精确匹配的词条中文名称", type=openapi.TYPE_STRING, required=True
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="查询成功，返回词条信息",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "查询成功",
+                        "data": {
+                            "id": 1,
+                            "word_code": "A000001",
+                            "word_name": "抗病毒",
+                            "word_eng": "",
+                            "word_short": "",
+                            "word_class": "临床信息",
+                            "word_apply": "临床",
+                            "word_belong": "",
+                            "data_type": "",
+                            "input_type": "single",
+                            "options": "恩替卡韦,替诺福韦,无,其他",
+                            "followup_options": {},
+                            "has_unit": 0,
+                            "unit": "",
+                            "is_score": 1,
+                            "score_func": "我是具体的评分计算方式，存储为字符串"
+                        }
+                    }
+                }
+            ),
+            400: '缺少 word_name 参数',
+            404: '未找到对应词条'
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='by-word-name')
+    def search_by_word_name(self, request):
+        """
+        根据 word_name 完全匹配查询词条信息
+        GET /api/dictionary/by-word-name/?word_name=xxx
+        """
+        word_name = request.query_params.get('word_name')
+        if not word_name:
+            return Response({
+                'code': 400,
+                'msg': '请提供 word_name 参数',
+                'data': None
+            }, status=400)
+        try:
+            instance = Dictionary.objects.get(word_name=word_name)
+        except Dictionary.DoesNotExist:
+            return Response({
+                'code': 404,
+                'msg': f'未找到 word_name 为 {word_name} 的词条',
+                'data': None
+            }, status=404)
+        serializer = self.get_serializer(instance)
+        return Response({
+            'code': 200,
+            'msg': '查询成功',
+            'data': serializer.data
+        })
 
 class DataTemplateViewSet(CustomModelViewSet):
     """
