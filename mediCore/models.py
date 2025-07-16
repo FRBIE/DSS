@@ -13,7 +13,7 @@ class Dictionary(models.Model):
     word_eng = models.CharField(max_length=255, null=True, blank=True, help_text='英文名称')
     word_short = models.CharField(max_length=255, null=True, blank=True, help_text='英文缩写')
     word_class = models.CharField(max_length=255, help_text='词条类型')
-    word_apply = models.CharField(max_length=255, help_text='词条应用')
+    word_apply = models.CharField(max_length=255, null=True, blank=True, help_text='词条应用')
     word_belong = models.CharField(max_length=255, null=True, blank=True, help_text='从属别名')
     data_type = models.CharField(max_length=128, null=True, blank=True, help_text='数据类型，如数值类型、文本类型')
     input_type = models.CharField(

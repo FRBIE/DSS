@@ -34,6 +34,7 @@ class DictionarySerializer(serializers.ModelSerializer):
     unit = serializers.CharField(required=False, allow_blank=True, allow_null=True, help_text='词条单位')
     is_score = serializers.BooleanField(required=False, help_text='是否为评分词条 0-不是 1-是')
     score_func = serializers.CharField(required=False, allow_blank=True, allow_null=True, help_text='评分计算方式')
+    word_apply = serializers.CharField(required=False, allow_null=True, allow_blank=True, help_text='词条应用（可选）')
     class Meta:
         model = Dictionary
         fields = '__all__'  # 确保input_type、options、followup_options被序列化
@@ -56,6 +57,15 @@ class DictionarySerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def create(self, validated_data):
+        # 自动补全 input_type 和 options 的默认值，防止生成 word_code 时失败
+        if 'input_type' not in validated_data or validated_data['input_type'] is None:
+            validated_data['input_type'] = 'text'
+        # options 字段应为 None（模型允许 null），不要设为 ''
+        if 'options' not in validated_data or validated_data['options'] in (None, ''):
+            validated_data['options'] = None
+        # word_apply 字段如未传，自动补全为空字符串，防止数据库层 NOT NULL 报错
+        if 'word_apply' not in validated_data or validated_data['word_apply'] in (None, ''):
+            validated_data['word_apply'] = ''
         # 如果已存在 word_code，说明是更新，不生成新 word_code
         if 'word_code' in validated_data and validated_data['word_code']:
             return super().create(validated_data)

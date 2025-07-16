@@ -75,14 +75,14 @@ class DictionaryViewSet(CustomModelViewSet):
         operation_description="创建或更新词条（如果请求中包含id且该id在数据库中存在，则进行更新操作；否则创建新词条）",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['word_name', 'word_class', 'word_apply', 'input_type', 'options'],
+            required=['word_name', 'word_class', 'input_type', 'options'],  # 移除 word_apply
             properties={
                 'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='词条ID（可选，如果提供且存在则进行更新操作）'),
                 'word_name': openapi.Schema(type=openapi.TYPE_STRING, description='中文名称'),
                 'word_eng': openapi.Schema(type=openapi.TYPE_STRING, description='英文名称'),
                 'word_short': openapi.Schema(type=openapi.TYPE_STRING, description='英文缩写'),
                 'word_class': openapi.Schema(type=openapi.TYPE_STRING, description='词条类型'),
-                'word_apply': openapi.Schema(type=openapi.TYPE_STRING, description='词条应用'),
+                'word_apply': openapi.Schema(type=openapi.TYPE_STRING, description='词条应用（可选）'),
                 'word_belong': openapi.Schema(type=openapi.TYPE_STRING, description='从属别名'),
                 'data_type': openapi.Schema(type=openapi.TYPE_STRING, description='数据类型'),
                 'input_type': openapi.Schema(type=openapi.TYPE_STRING, description='填写方式'),
@@ -99,7 +99,7 @@ class DictionaryViewSet(CustomModelViewSet):
                 "word_eng": "",
                 "word_short": "",
                 "word_class": "临床信息",
-                "word_apply": "临床",
+                # "word_apply": "临床",  # 可选
                 "word_belong": "",
                 "data_type": "",
                 "input_type": "single",
@@ -1623,40 +1623,100 @@ class DataTableCRUDView(APIView):
         })
 
     @swagger_auto_schema(
-        operation_description="创建新数据",
+        operation_description="""
+        创建新数据，支持单条和批量导入。
+        
+        - 单条数据格式：
+        {
+            "case_code": "C000001",
+            "template_code": "T000001",
+            "word_code": "A000001",
+            "check_time": "2025-06-18 04:36:00",
+            "value": "5.6"
+        }
+        
+        - 批量数据格式：
+        {
+            "case_code": "C000001",
+            "template_code": "T000001",
+            "data_list": [
+                {
+                    "word_code": "A000001",
+                    "check_time": "2025-05-25 14:30:00",
+                    "value": "值1"
+                },
+                {
+                    "word_code": "A000002",
+                    "check_time": "2025-05-25 15:30:00",
+                    "value": "值2"
+                }
+            ]
+        }
+        
+        - 返回：
+          - 单条：{"code":200, "msg":"创建成功", "data":{...}}
+          - 批量：{"code":200, "msg":"创建成功", "data":{...}}
+        """,
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['case_code', 'template_code', 'word_code', 'check_time', 'value'],
             properties={
                 'case_code': openapi.Schema(type=openapi.TYPE_STRING, description='病例编号'),
                 'template_code': openapi.Schema(type=openapi.TYPE_STRING, description='模板编号'),
-                'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号'),
-                'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间，格式YYYY-MM-DD HH:MM:SS'),
-                'value': openapi.Schema(type=openapi.TYPE_STRING, description='数据值'),
+                'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号（单条时必填）'),
+                'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间（单条时必填）'),
+                'value': openapi.Schema(type=openapi.TYPE_STRING, description='数据值（单条时必填）'),
+                'data_list': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Items(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号'),
+                            'check_time': openapi.Schema(type=openapi.TYPE_STRING, description='检查时间'),
+                            'value': openapi.Schema(type=openapi.TYPE_STRING, description='数据值'),
+                        }
+                    ),
+                    description='批量数据列表（批量时必填）'
+                ),
             },
+            required=['case_code', 'template_code'],
             example={
                 'case_code': 'C000001',
                 'template_code': 'T000001',
-                'word_code': 'A000001',
-                'check_time': '2025-06-18 04:36:00',
-                'value': '5.6'
+                'data_list': [
+                    {'word_code': 'A000001', 'check_time': '2025-05-25 14:30:00', 'value': '值1'},
+                    {'word_code': 'A000002', 'check_time': '2025-05-25 15:30:00', 'value': '值2'}
+                ]
             }
         ),
         responses={
             200: openapi.Response(
-                description="成功创建数据",
+                description="成功创建数据（单条或批量）",
                 examples={
                     "application/json": {
                         "code": 200,
                         "msg": "创建成功",
                         "data": {
-                            "id": 123,
-                            "case_code": "C000001",
-                            "template_code": "T000001",
-                            "word_code": "A000001",
-                            "word_name": "白细胞",
-                            "value": "5.6",
-                            "check_time": "2025-06-18 04:36:00"
+                            "message": "成功创建 2 条数据记录",
+                            "data": [
+                                {
+                                    "id": 123,
+                                    "case_code": "C000001",
+                                    "template_category": "分类1",
+                                    "template_name": "测试",
+                                    "word_name": "string",
+                                    "value": "值1",
+                                    "check_time": "2025-05-25 14:30:00"
+                                },
+                                {
+                                    "id": 124,
+                                    "case_code": "C000001",
+                                    "template_category": "分类1",
+                                    "template_name": "测试",
+                                    "word_name": "string",
+                                    "value": "值2",
+                                    "check_time": "2025-05-25 15:30:00"
+                                }
+                            ]
                         }
                     }
                 }
@@ -1666,7 +1726,19 @@ class DataTableCRUDView(APIView):
         }
     )
     def post(self, request):
-        """创建数据"""
+        """创建数据，支持单条和批量（data_list）"""
+        # 判断是否为批量
+        if request.data.get('data_list'):
+            # 批量模式
+            serializer = DataTableBulkCreateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            instances = serializer.save()
+            return Response({
+                'code': 200,
+                'msg': '创建成功',
+                'data': serializer.data
+            })
+        # 单条模式（原有逻辑）
         case_code = request.data.get('case_code')
         template_code = request.data.get('template_code')
         word_code = request.data.get('word_code')
