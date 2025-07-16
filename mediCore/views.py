@@ -242,6 +242,29 @@ class DictionaryViewSet(CustomModelViewSet):
             'data': serializer.data
         })
 
+    def list(self, request, *args, **kwargs):
+        """
+        如果不传 page 和 page_size，则返回全部词条（不分页）。否则按分页参数返回。
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        page = request.query_params.get('page')
+        page_size = request.query_params.get('page_size')
+        if page is None and page_size is None:
+            # 不分页，返回全部
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'code': 200,
+                'msg': '查询成功',
+                'data': {
+                    'list': serializer.data,
+                    'total': len(serializer.data),
+                    'page': 1,
+                    'page_size': len(serializer.data)
+                }
+            })
+        # 否则走原有分页逻辑
+        return super().list(request, *args, **kwargs)
+
 class DataTemplateViewSet(CustomModelViewSet):
     """
     API endpoint for 临床模板管理.
