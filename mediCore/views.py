@@ -1489,10 +1489,10 @@ class DataTableCRUDView(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
-        operation_description="根据病例编号、模板编号、词条编号、检查时间查询数据。\n\n如果不传check_time，则返回所有相关数据（即所有匹配病例编号、模板编号、词条编号的数据，check_time不是必填项），返回格式为 {\"list\": [...]}",
+        operation_description="根据病例编号、词条编号、检查时间查询数据。\n\n如果不传template_code，则返回所有相关数据（即所有匹配病例编号、词条编号的数据，check_time不是必填项），返回格式为 {\"list\": [...]}。\n\n- case_code: 必填，病例编号\n- word_code: 必填，词条编号\n- template_code: 可选，模板编号。如果不传，则不作为过滤条件。\n- check_time: 可选，检查时间。\n\n返回格式为 {list: [...]}。\n\n【注意】template_code 现在是可选参数，不传时会返回所有匹配病例编号和词条编号的数据。",
         manual_parameters=[
             openapi.Parameter('case_code', openapi.IN_QUERY, description="病例编号", type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('template_code', openapi.IN_QUERY, description="模板编号", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('template_code', openapi.IN_QUERY, description="模板编号（可选）", type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('word_code', openapi.IN_QUERY, description="词条编号", type=openapi.TYPE_STRING, required=True),
             openapi.Parameter('check_time', openapi.IN_QUERY, description="检查时间，格式YYYY-MM-DD HH:MM:SS（可选，不传则返回所有相关数据，返回格式为 {list: [...]})", type=openapi.TYPE_STRING, required=False),
         ],
@@ -1513,24 +1513,6 @@ class DataTableCRUDView(APIView):
                                     "word_name": "总胆红素",
                                     "value": "178",
                                     "check_time": "2025-05-25 15:30:00"
-                                },
-                                {
-                                    "id": 3001,
-                                    "case_code": "C000039",
-                                    "template_code": "T000001",
-                                    "word_code": "TES000022",
-                                    "word_name": "总胆红素",
-                                    "value": "85",
-                                    "check_time": "2025-05-27 15:30:00"
-                                },
-                                {
-                                    "id": 3002,
-                                    "case_code": "C000039",
-                                    "template_code": "T000001",
-                                    "word_code": "TES000022",
-                                    "word_name": "总胆红素",
-                                    "value": "120",
-                                    "check_time": "2025-05-26 09:15:00"
                                 }
                             ]
                         }
@@ -1542,16 +1524,16 @@ class DataTableCRUDView(APIView):
         }
     )
     def get(self, request):
-        """查询数据"""
+        """查询数据（template_code 现在是可选参数，不传时不作为过滤条件）"""
         case_code = request.query_params.get('case_code')
-        template_code = request.query_params.get('template_code')
+        template_code = request.query_params.get('template_code')  # 可选
         word_code = request.query_params.get('word_code')
         check_time = request.query_params.get('check_time')
         
-        if not all([case_code, template_code, word_code]):
+        if not all([case_code, word_code]):
             return Response({
                 'code': 400,
-                'msg': '请提供case_code、template_code和word_code',
+                'msg': '请提供case_code和word_code',
                 'data': None
             }, status=400)
 
@@ -1559,9 +1541,8 @@ class DataTableCRUDView(APIView):
         from django.utils.dateparse import parse_datetime
         try:
             case = Case.objects.get(case_code=case_code)
-            template = DataTemplate.objects.get(template_code=template_code)
             dictionary = Dictionary.objects.get(word_code=word_code)
-        except (Case.DoesNotExist, DataTemplate.DoesNotExist, Dictionary.DoesNotExist) as e:
+        except (Case.DoesNotExist, Dictionary.DoesNotExist) as e:
             return Response({
                 'code': 404,
                 'msg': f'未找到相关数据: {str(e)}',
@@ -1570,9 +1551,19 @@ class DataTableCRUDView(APIView):
 
         queryset = DataTable.objects.filter(
             case=case,
-            data_template=template,
             dictionary=dictionary
         )
+        # 只有当 template_code 提供时才作为过滤条件
+        if template_code:
+            try:
+                template = DataTemplate.objects.get(template_code=template_code)
+                queryset = queryset.filter(data_template=template)
+            except DataTemplate.DoesNotExist as e:
+                return Response({
+                    'code': 404,
+                    'msg': f'未找到相关模板: {str(e)}',
+                    'data': None
+                }, status=404)
         if check_time:
             dt_check_time = parse_datetime(check_time)
             if not dt_check_time:
@@ -1594,7 +1585,7 @@ class DataTableCRUDView(APIView):
             {
                 'id': dt.id,
                 'case_code': case_code,
-                'template_code': template_code,
+                'template_code': dt.data_template.template_code if dt.data_template else None,
                 'word_code': word_code,
                 'word_name': dictionary.word_name,
                 'value': dt.value,
