@@ -72,12 +72,23 @@ class DictionaryViewSet(CustomModelViewSet):
         raise NotFound('未找到对应的词条（word_code 或 id）')
 
     @swagger_auto_schema(
-        operation_description="创建或更新词条（如果请求中包含id且该id在数据库中存在，则进行更新操作；否则创建新词条）",
+        operation_description="""
+        创建或更新词条：
+        - 如果请求中包含 id 或 word_code，且数据库中存在，则进行更新操作（优先 id，再 word_code，再 word_name）。
+        - 如果都没有或都查不到，则创建新词条。
+        
+        请求体可包含：
+        - id（可选，存在则优先用于更新）
+        - word_code（可选，存在则用于更新）
+        - word_name（可选，存在则用于更新）
+        其他字段同词条定义。
+        """,
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['word_name', 'word_class', 'input_type', 'options'],  # 移除 word_apply
             properties={
                 'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='词条ID（可选，如果提供且存在则进行更新操作）'),
+                'word_code': openapi.Schema(type=openapi.TYPE_STRING, description='词条编号（可选，如果提供且存在则进行更新操作）'),
                 'word_name': openapi.Schema(type=openapi.TYPE_STRING, description='中文名称'),
                 'word_eng': openapi.Schema(type=openapi.TYPE_STRING, description='英文名称'),
                 'word_short': openapi.Schema(type=openapi.TYPE_STRING, description='英文缩写'),
@@ -95,6 +106,7 @@ class DictionaryViewSet(CustomModelViewSet):
             },
             example={
                 "id": 354,
+                "word_code": "A000001",
                 "word_name": "抗病毒",
                 "word_eng": "",
                 "word_short": "",
@@ -113,21 +125,33 @@ class DictionaryViewSet(CustomModelViewSet):
         )
     )
     def create(self, request, *args, **kwargs):
-        # 检查是否提供了id字段或word_name字段
+        # 支持通过 id 或 word_code 或 word_name 查找已存在的词条并更新，优先级 id > word_code > word_name
         dictionary_id = request.data.get('id')
+        word_code = request.data.get('word_code')
         word_name = request.data.get('word_name')
         instance = None
+
+        # 优先用 id 查找
         if dictionary_id:
             try:
                 instance = Dictionary.objects.get(id=dictionary_id)
             except Dictionary.DoesNotExist:
                 instance = None
-        # 如果没有通过id找到，再通过word_name查找
+
+        # 用 word_code 查找
+        if not instance and word_code:
+            try:
+                instance = Dictionary.objects.get(word_code=word_code)
+            except Dictionary.DoesNotExist:
+                instance = None
+
+        # 用 word_name 查找（兼容原逻辑）
         if not instance and word_name:
             try:
                 instance = Dictionary.objects.get(word_name=word_name)
             except Dictionary.DoesNotExist:
                 instance = None
+
         if instance:
             # 更新操作，word_code 不变
             serializer = self.get_serializer(instance, data=request.data, partial=True)
