@@ -43,12 +43,7 @@ INSTALLED_APPS = [
     'mediCore',
 ]
 # 配置 CORS
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5431",
-    "http://127.0.0.1:5431"
-]
-# 配置跨域白名单
-CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS.copy()
+CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOW_CREDENTIALS = True  # 允许携带 Cookie
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
