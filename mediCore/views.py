@@ -484,6 +484,8 @@ class CaseViewSet(CustomModelViewSet):
       - 可更新除case_code外的所有字段
     
     - **Delete**: DELETE /api/case/{case_code}/
+      - 删除病例及其相关数据
+      - 如果删除的病例是该患者的最后一个病例，则同时删除患者信息
     
     - **Identity Cases**: GET /api/case/identity/{identity_id}/
       - 获取指定身份证号的所有病例
@@ -513,6 +515,73 @@ class CaseViewSet(CustomModelViewSet):
                 Q(name__icontains=search)
             ).distinct()
         return queryset
+
+    @swagger_auto_schema(
+        operation_description="删除病例。如果删除的病例是该患者的最后一个病例，则同时删除患者信息。",
+        responses={
+            200: openapi.Response(
+                description="成功删除病例",
+                examples={
+                    "application/json": {
+                        "code": 200,
+                        "msg": "删除成功",
+                        "data": {
+                            "deleted_case_code": "C000031",
+                            "deleted_patient": True,
+                            "patient_identity_id": "XXXXXXXXXXXXXX"
+                        }
+                    }
+                }
+            ),
+            404: '病例不存在',
+            500: '删除失败'
+        }
+    )
+    def destroy(self, request, *args, **kwargs):
+        """
+        删除病例，如果删除的病例是该患者的最后一个病例，则同时删除患者信息
+        """
+        try:
+            instance = self.get_object()
+            
+            # 获取患者信息
+            patient = instance.identity
+            patient_identity_id = patient.identity_id
+            
+            # 检查该患者是否还有其他病例（除了当前要删除的病例）
+            remaining_cases = Case.objects.filter(
+                identity=patient
+            ).exclude(id=instance.id)
+            
+            # 删除病例（这会级联删除相关的DataTable、ArchiveCase、Images等）
+            self.perform_destroy(instance)
+            
+            # 如果删除后该患者没有其他病例了，则删除患者信息
+            if not remaining_cases.exists():
+                patient.delete()
+                return APIResponse(
+                    response_code=ResponseCode.SUCCESS,
+                    data={
+                        "deleted_case_code": instance.case_code,
+                        "deleted_patient": True,
+                        "patient_identity_id": patient_identity_id,
+                        "message": f"已删除病例 {instance.case_code} 和患者 {patient_identity_id}（该患者的最后一个病例）"
+                    }
+                )
+            else:
+                return APIResponse(
+                    response_code=ResponseCode.SUCCESS,
+                    data={
+                        "deleted_case_code": instance.case_code,
+                        "deleted_patient": False,
+                        "patient_identity_id": patient_identity_id,
+                        "remaining_cases_count": remaining_cases.count(),
+                        "message": f"已删除病例 {instance.case_code}，患者 {patient_identity_id} 还有其他 {remaining_cases.count()} 个病例"
+                    }
+                )
+                
+        except Exception as e:
+            return APIResponse(response_code=ResponseCode.INTERNAL_ERROR, data=str(e))
 
     @action(detail=False, url_path='identity/(?P<identity_id>[^/.]+)')
     def identity_cases(self, request, identity_id=None):
