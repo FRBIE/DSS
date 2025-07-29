@@ -26,6 +26,8 @@ from drf_yasg import openapi
 from rest_framework import serializers
 from datetime import date
 from django.utils.dateparse import parse_datetime
+from utils.response import APIResponse
+from utils.enums import ResponseCode
 
 class DictionaryViewSet(CustomModelViewSet):
     """
@@ -156,12 +158,8 @@ class DictionaryViewSet(CustomModelViewSet):
             # 更新操作，word_code 不变
             serializer = self.get_serializer(instance, data=request.data, partial=True)
             if not serializer.is_valid():
-                from utils.response import APIResponse
-                from utils.enums import ResponseCode
                 return APIResponse(response_code=ResponseCode.BAD_REQUEST, data=serializer.errors)
             self.perform_update(serializer)
-            from utils.response import APIResponse
-            from utils.enums import ResponseCode
             return APIResponse(response_code=ResponseCode.SUCCESS, data=serializer.data)
         # 执行原有的创建逻辑
         return super().create(request, *args, **kwargs)
@@ -548,13 +546,11 @@ class CaseViewSet(CustomModelViewSet):
             patient = instance.identity
             patient_identity_id = patient.identity_id
             
-            # 检查该患者是否还有其他病例（除了当前要删除的病例）
-            remaining_cases = Case.objects.filter(
-                identity=patient
-            ).exclude(id=instance.id)
-            
             # 删除病例（这会级联删除相关的DataTable、ArchiveCase、Images等）
             self.perform_destroy(instance)
+            
+            # 删除病例后，重新检查该患者是否还有其他病例
+            remaining_cases = Case.objects.filter(identity=patient)
             
             # 如果删除后该患者没有其他病例了，则删除患者信息
             if not remaining_cases.exists():
