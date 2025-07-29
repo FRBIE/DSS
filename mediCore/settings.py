@@ -44,7 +44,6 @@ INSTALLED_APPS = [
 ]
 # 配置 CORS
 CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOW_CREDENTIALS = True  # 允许携带 Cookie
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -91,10 +90,8 @@ DATABASES = {
         'PORT': '3306',  # Docker MySQL 端口
     }
 }
-#生产环境
-ALLOWED_HOSTS = [
-    '118.89.187.153'
-    ]
+
+ALLOWED_HOSTS = ['*']
 
 # # #本地开发环境
 # DATABASES = {
